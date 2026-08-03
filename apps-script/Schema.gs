@@ -27,8 +27,6 @@ var SCHEMA = {
       { name: 'wards',          type: 'int',  width: 70,  note: 'Number of wards' },
       { name: 'focal_person',   type: 'text', width: 160 },
       { name: 'phone',          type: 'text', width: 120 },
-      { name: 'code_hash',      type: 'text', width: 200, note: 'SHA-256 of access code + salt. Never store the plain code.' },
-      { name: 'code_salt',      type: 'text', width: 130 },
       { name: 'active',         type: 'bool', width: 70 },
       { name: 'updated_at',     type: 'datetime', width: 160 }
     ]
@@ -217,11 +215,8 @@ var SEED_CONFIG = [
   ['office_name',        'Health Office Sankhuwasabha',       'Reporting office'],
   ['fiscal_year',        '२०८२/८३',                            'Shown in the top utility bar'],
   ['notice_text',        'Submit the daily return before 5:00 PM. Positive cases must be line-listed the same day.', 'Red notice strip on every screen'],
-  ['district_code_hash', '',                                  'Set by "Reset district access code" — unlocks the line list (PII)'],
-  ['district_code_salt', '',                                  'Auto-generated'],
   ['logo_url',           '',                                  'Public image URL for the Nepal emblem. Leave blank to use the built-in mark.'],
   ['digest_email',       '',                                  'Optional. Address that receives the 5 PM "who has not reported" email.'],
-  ['session_hours',      '10',                                'How long a login stays valid'],
   ['allow_backdate_days', '7',                                'How many days back a palika may still submit/edit a return'],
   ['timezone',           'Asia/Kathmandu',                    '']
 ];

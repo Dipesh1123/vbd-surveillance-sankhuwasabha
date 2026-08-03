@@ -259,6 +259,20 @@ function unitByPalika(name) {
   return null;
 }
 
+/**
+ * The palika a request is acting on, by name or unit_id.
+ *
+ * With no sessions there is nothing to check this against — whoever is asking
+ * may write to any palika. It exists to turn whatever the browser sent into a
+ * real Units row, and to fail clearly when it does not name one, rather than
+ * writing a row attributed to a palika that does not exist.
+ */
+function resolveUnit(palikaOrUnitId) {
+  var unit = unitById(palikaOrUnitId) || unitByPalika(palikaOrUnitId);
+  if (!unit) throw userError('Select a palika before saving.');
+  return unit;
+}
+
 /** Names only, in sheet order — the canonical palika list for the UI. */
 function palikaNames() {
   return units().map(function (u) { return u.palika; });

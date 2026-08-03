@@ -5,11 +5,10 @@ const path = require("path");
 const vm = require("vm");
 const { JSDOM } = require("jsdom");
 
-const API_NAMES = ["apiBootstrap", "apiLogin", "apiLoginDistrict", "apiLogout", "apiGetPulse",
-  "apiSavePulse", "apiListCases", "apiSaveCase", "apiDeleteCase", "apiSetOutcome",
-  "apiDashboard", "apiExport", "apiDataQuality"];
+const API_NAMES = ["apiBootstrap", "apiGetPulse", "apiSavePulse", "apiListCases", "apiSaveCase",
+  "apiDeleteCase", "apiSetOutcome", "apiDashboard", "apiExport", "apiDataQuality"];
 
-const GS_ORDER = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Auth.gs", "Api.gs", "Rpc.gs", "Code.gs"];
+const GS_ORDER = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Api.gs", "Rpc.gs", "Code.gs"];
 
 /** Load the .gs files into a fresh context and provision the workbook. */
 function startServer(dir, globals) {
@@ -149,7 +148,8 @@ function startWebApp(server, opts) {
   const win = dom.window;
   const errors = [];
   win.addEventListener("error", e => errors.push(String(e.message)));
-  if (o.session) win.sessionStorage.setItem("vbd.session.v1", JSON.stringify(o.session));
+  // Mimic a device that has been used before and remembers its palika.
+  if (o.palika) win.localStorage.setItem("vbd.palika.v1", o.palika);
 
   /* fetch() straight into rpcDispatch_. Everything crosses the boundary as
      JSON text, exactly as it would over the wire — which is what makes this

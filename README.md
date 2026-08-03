@@ -9,7 +9,7 @@ live dashboard, a reconciled line list, and an audit trail.
 | Tier | Technology |
 |---|---|
 | Frontend | Static single-page app on Vercel — plain HTML/CSS/JS, no framework, no build step |
-| Backend | Google Apps Script (`.gs`) — sessions, validation, aggregation, exports |
+| Backend | Google Apps Script (`.gs`) — validation, aggregation, exports |
 | Database | Google Sheets — six tabs, defined in `Schema.gs` |
 
 The frontend talks to the backend as a JSON API through a same-origin proxy
@@ -31,7 +31,7 @@ nothing if the hosted site is unreachable.
 
 ```bash
 npm install
-npm test        # 407 checks — see the list below
+npm test        # 381 checks — see the list below
 ```
 
 Deploying from the command line with `clasp` is supported — see
@@ -61,12 +61,11 @@ api/                    Vercel serverless functions
 
 apps-script/            pushed by clasp
   Schema.gs             every sheet and column, in one place
-  Util.gs               dates, Bikram Sambat, hashing, coercion
+  Util.gs               dates, Bikram Sambat, coercion, error shaping
   Repo.gs               the only code that touches SpreadsheetApp
-  Setup.gs              provisioning, access codes, data quality report
-  Auth.gs               sessions, roles, lockout
+  Setup.gs              provisioning and the data quality report
   Api.gs                everything the browser may ask for
-  Rpc.gs                doPost — the JSON API, with its allowlist
+  Rpc.gs                doPost — the JSON API, with its allowlist (the only gate)
   Code.gs               doGet, the daily digest trigger
   Index.html            page shell for the direct /exec fallback
   Styles.html           GENERATED from public/styles.css
@@ -76,12 +75,11 @@ apps-script/            pushed by clasp
 test/                   runs on Node, not in Google
   gasmock.js            mock Apps Script runtime (sheets, cache, properties, locks)
   harness.js            shared jsdom wiring for both transports
-  backend.test.js       67 logic tests
+  backend.test.js       69 logic tests
   edge.test.js          65 data-integrity edge cases
-  frontend.test.js      96 UI tests in jsdom against the real backend
-  session.test.js       35 tests: page reload, dead sessions, the district role
-  setup.test.js         16 tests: first-run state before the database exists
-  transport.test.js     65 tests: the hosted path — the client over JSON/HTTP
+  frontend.test.js      98 UI tests in jsdom against the real backend
+  setup.test.js         17 tests: first-run state before the database exists
+  transport.test.js     69 tests: the hosted path — the client over JSON/HTTP
   proxy.test.js         63 tests: the Vercel function, redirects and failures
   syntax.check.js       parses every .gs and inline script
   contract.check.js     client calls vs server functions vs the RPC allowlist
@@ -125,23 +123,37 @@ submitting, but the client copy is only a courtesy.
 
 ---
 
-## Access model
+## Access model — there isn't one
 
-Palika staff often have no Google account and share a device at the health post,
-so the system authenticates the **reporting unit**, not the individual, with a
-6-character code the district issues and can revoke.
+**The system has no authentication.** No codes, no sessions, no roles. Anyone
+who has the URL can do anything the app can do:
 
-- **Unit session** — one palika. Files its own return, line-lists its own cases,
-  sees district aggregates. Patient names are masked server-side as `••••••`.
-- **District session** — surveillance staff. All palikas, and the only role that
-  ever receives patient names.
+- read every patient's name, age, ward and tole
+- file or overwrite any palika's daily return
+- add, edit or delete any case, including death outcomes
 
-Both can be held at once, so a district officer working in a palika office can
-enter that palika's return and still read the line list.
+This was a deliberate decision by the district. Access codes were suppressing
+reporting at palikas where staff share a device and forget them, and reporting
+completeness was judged to matter more than confidentiality. It is a real
+trade, not an oversight, and it is written down here so nobody has to guess
+later whether the missing checks were intentional.
 
-Codes are stored as salted SHA-256 hashes and shown once. Eight wrong attempts
-locks that code for 15 minutes; the counter is durable and cannot be reset by
-waiting for a cache eviction.
+What follows from it:
+
+- **The URL is the only secret.** Treat it the way you would have treated the
+  access codes. It should not go in a public document or a group chat that
+  outlives the people in it.
+- **The audit trail records what changed, never who.** Every row is attributed
+  to `open`. It can tell you a case was deleted at 16:42; it cannot tell you by
+  whom.
+- **A wrong palika is now a data risk.** Nothing stops a reporter filing under
+  the wrong palika except the selector in the sidebar, which is why it is a
+  standing control rather than something buried in a form.
+- **The reconciliation rules carry more weight than before.** They are the only
+  remaining automatic check on whether the numbers make sense.
+
+If this ever needs reversing, the removal is one commit — see the history for
+`Auth.gs`, which held the sessions, roles and lockout.
 
 ---
 
@@ -152,8 +164,8 @@ Stated plainly so nobody is surprised later:
 - **It is not built for scale.** Ten palikas and a few thousand rows a year is
   comfortable. Past roughly 20,000 rows it gets slow and needs archiving; past a
   few years, or beyond one district, it needs a real database.
-- **Patient names sit on Google servers outside Nepal.** Confirm this against
-  your data policy before entering real data.
+- **Patient names sit on Google servers outside Nepal, behind no login.** Confirm
+  this against your data policy before entering real data.
 - **The Nepali calendar needs feeding.** Month lengths are set annually by the
   Nepal Calendar Determination Committee and cannot be computed. The seeded
   table ends **19 November 2026**, after which dates display as Gregorian until

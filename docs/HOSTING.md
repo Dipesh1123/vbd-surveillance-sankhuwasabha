@@ -9,7 +9,7 @@ both are live at once.
 | **Direct (fallback)** | the script's `/exec` URL | Apps Script, via HtmlService | Apps Script, via `google.script.run` |
 
 The spreadsheet is the database in both cases. Nothing about the data model,
-the access codes or the reconciliation rules changes between them.
+the reconciliation rules or the (absent) access control changes between them.
 
 ---
 
@@ -39,8 +39,8 @@ This project does (2), and keeps (1) as well — belt and braces, so that
 `public/config.js` can be repointed straight at `/exec` on a host with no
 serverless functions (GitHub Pages, a departmental web server) and still work.
 
-The proxy is deliberately dumb. It does not know what a session is, does not
-cache and does not interpret payloads. **Authentication stays in Apps Script,
+The proxy is deliberately dumb. It holds no state, does not
+cache and does not interpret payloads. **All validation stays in Apps Script,
 which is the only tier that can see the sheet.**
 
 ---
@@ -154,10 +154,18 @@ upstream reply — which matters because Apps Script answers with an HTML error
 page when it is mid-deploy or out of quota, and forwarding that verbatim would
 put Google's markup on a health worker's screen.
 
-**Does not:** authenticate. Anyone can POST to `/api/rpc`. They still need a
-palika access code to get anything back, the codes are salted-hashed, and eight
-wrong attempts locks that code for 15 minutes. The proxy is a convenience and a
-safety net, not a security boundary.
+**Does not:** authenticate — and neither does anything behind it. There are no
+access codes anywhere in this system any more (see `README.md ▸ Access model`),
+so anyone who can POST to `/api/rpc` can read every patient name and can add,
+edit or delete any case.
+
+That makes the allowlist in `Rpc.gs` the only thing deciding what the outside
+world can reach. Adding a function name to it publishes that function. Read it
+before you extend it.
+
+The one protection the proxy does still provide is keeping the Apps Script
+`/exec` URL out of the browser, so the open API is at least reachable at only
+one address you control rather than two.
 
 ---
 
@@ -170,8 +178,8 @@ curl -s https://<project>.vercel.app/api/health
 Expect `"ok": true` and an `upstreamDeployment` ending in the same 8 characters
 as your current `/exec` URL. Then, in a browser:
 
-1. Open the site. The sign-in gate should render with all ten palikas listed.
-2. Sign in with a palika code. The dashboard should load.
+1. Open the site. The dashboard should render immediately, with no sign-in.
+2. Pick a palika in the sidebar and open Daily numbers. It should load.
 3. Open the direct `/exec` URL and confirm it shows the same build.
 
 If the page loads but every action fails, check `/api/health` first — a mismatched

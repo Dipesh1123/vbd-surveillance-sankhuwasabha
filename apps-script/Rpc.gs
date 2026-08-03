@@ -19,15 +19,14 @@
  * Callable methods, by name.
  *
  * Deliberately an allowlist rather than a lookup in the global scope: this
- * project's globals also include provisionEverything, setDistrictCode and
- * issueAllCodes, none of which should be one HTTP request away from anybody who
- * learns the URL.
+ * project's globals also include provisionEverything and setupDatabase, neither
+ * of which should be one HTTP request away from anybody who learns the URL.
+ *
+ * With no authentication in front of the API, this list is the only thing
+ * deciding what the outside world can call. Adding a name here publishes it.
  */
 var RPC_METHODS = {
   apiBootstrap: true,
-  apiLogin: true,
-  apiLoginDistrict: true,
-  apiLogout: true,
   apiGetPulse: true,
   apiSavePulse: true,
   apiListCases: true,

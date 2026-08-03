@@ -204,3 +204,25 @@ function userError(message) {
   return e;
 }
 
+/**
+ * Wrap every API entry point. Converts thrown errors into a shape the client can
+ * render, and keeps internal details (stack traces, sheet names) off the wire.
+ *
+ * This used to live in Auth.gs alongside the session code. The sessions are
+ * gone; the error shaping is not, because it is what stops a broken sheet
+ * reference reaching a reporter's screen as a stack trace.
+ */
+function guard_(fn) {
+  try {
+    var data = fn();
+    return { ok: true, data: data };
+  } catch (e) {
+    var msg = String(e && e.message ? e.message : e);
+    // A data-entry mistake is not an incident: log it as a plain line so real
+    // faults still stand out with a stack trace in the execution log.
+    if (e && e.userFacing) console.log('user error: ' + msg);
+    else console.error(msg + (e && e.stack ? '\n' + e.stack : ''));
+    return { ok: false, code: e && e.userFacing ? 'INVALID' : 'ERROR', error: msg };
+  }
+}
+

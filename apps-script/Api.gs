@@ -2,8 +2,14 @@
  * Api.gs — everything the browser is allowed to ask the server to do.
  *
  * All handlers return { ok: true, data } or { ok: false, error } via guard_().
- * All handlers that touch PII call requireDistrict(). All handlers that write
- * take the document lock.
+ * All handlers that write take the document lock.
+ *
+ * THERE IS NO AUTHENTICATION. Every handler is reachable by anyone who has the
+ * URL, and patient names are returned in full to everybody. This was a
+ * deliberate decision by the district: access codes were suppressing reporting
+ * at palikas where staff share a device and forget them, and completeness was
+ * judged to matter more than confidentiality here. Do not add a permission
+ * check to one handler and assume the rest are covered — none of them are.
  *
  * The reconciliation rules in validatePulse_() are the heart of the system: the
  * aggregate daily return and the individual line list must agree, because the
@@ -14,10 +20,9 @@
 /* ------------------------------------------------------------ bootstrap -- */
 
 /**
- * Everything the client needs to draw its shell: config, palika list, calendar,
- * and — if a session is supplied — that session's identity.
+ * Everything the client needs to draw its shell: config, palika list, calendar.
  */
-function apiBootstrap(token) {
+function apiBootstrap() {
   return guard_(function () {
     // A reporter who opens the link before the district has finished setting up
     // should see an explanation, not a stack trace about a missing sheet.
@@ -30,18 +35,11 @@ function apiBootstrap(token) {
     var bs = bsTable();
     var today = todayIso();
 
-    var session = null;
-    try {
-      var s = requireSession(token);
-      session = { role: s.role, unit_id: s.unit_id, palika: s.palika };
-    } catch (e) { /* not signed in — that is fine */ }
-
     return {
       today: today,
       todayBs: adToBs(today, bs),
       todayBsLong: adToBsLong(today, bs),
       bsTable: bs,
-      session: session,
       diseases: DISEASES,
       outcomes: OUTCOMES,
       units: units().map(function (u) {
@@ -70,10 +68,9 @@ function apiBootstrap(token) {
  * Fetch one palika's return for one date, plus the live reconciliation state
  * (how many positives are declared vs how many cases are actually line-listed).
  */
-function apiGetPulse(token, palika, reportDate) {
+function apiGetPulse(palika, reportDate) {
   return guard_(function () {
-    var s = requireSession(token);
-    var unit = requireWritableUnit(s, palika);
+    var unit = resolveUnit(palika);
     var date = toIsoDate(reportDate) || todayIso();
 
     var pulse = findByKey('Pulses', 'pulse_id', pulseId(unit.unit_id, date));
@@ -96,11 +93,10 @@ function apiGetPulse(token, palika, reportDate) {
  * overwrites — that is intentional: the field workflow is "correct and resend",
  * not "file an amendment".
  */
-function apiSavePulse(token, payload) {
+function apiSavePulse(payload) {
   return guard_(function () {
-    var s = requireSession(token);
     payload = payload || {};
-    var unit = requireWritableUnit(s, payload.palika);
+    var unit = resolveUnit(payload.palika);
     var date = toIsoDate(payload.report_date);
     if (!date) throw userError('Report date is required.');
 
@@ -124,7 +120,7 @@ function apiSavePulse(token, payload) {
 
       upsertByKey('Pulses', 'pulse_id', candidate);
 
-      audit(unit.unit_id, s.role, existing ? 'update_pulse' : 'save_pulse', id,
+      audit(unit.unit_id, 'open', existing ? 'update_pulse' : 'save_pulse', id,
         'dengue tests ' + issues.dengue.tests + ', scrub tests ' + issues.scrub.tests +
         ', declared ' + candidate.dengue_positives + '/' + candidate.scrub_positives);
 
@@ -241,21 +237,16 @@ function assertDateWindow_(date) {
 /* ------------------------------------------------------------ line list -- */
 
 /**
- * The line list. Patient names are returned ONLY to a district session; a unit
- * session gets its own palika's rows with the name masked.
+ * The line list, with patient names, for anyone who asks. See the note at the
+ * top of this file: there is no session and no masking by design.
  */
-function apiListCases(token, filters) {
+function apiListCases(filters) {
   return guard_(function () {
-    var s = requireSession(token);
     var f = filters || {};
-    var isDistrict = s.role === 'district';
 
     var rows = readAll('Cases').filter(function (c) { return !c.deleted; });
 
-    // A unit may only ever see its own palika.
-    if (!isDistrict) {
-      rows = rows.filter(function (c) { return c.unit_id === s.unit_id; });
-    } else if (f.scope && f.scope !== 'all') {
+    if (f.scope && f.scope !== 'all') {
       rows = rows.filter(function (c) { return c.palika === f.scope; });
     }
 
@@ -267,7 +258,7 @@ function apiListCases(token, filters) {
     if (f.query) {
       var q = String(f.query).trim().toLowerCase();
       rows = rows.filter(function (c) {
-        return (isDistrict && String(c.patient_name).toLowerCase().indexOf(q) >= 0) ||
+        return String(c.patient_name || '').toLowerCase().indexOf(q) >= 0 ||
                String(c.tole || '').toLowerCase().indexOf(q) >= 0 ||
                String(c.case_id).toLowerCase().indexOf(q) >= 0;
       });
@@ -289,14 +280,14 @@ function apiListCases(token, filters) {
       page: page,
       perPage: perPage,
       pages: Math.max(1, Math.ceil(total / perPage)),
-      canSeeNames: isDistrict,
-      rows: slice.map(function (c) { return publicCase_(c, isDistrict, bs); })
+      canSeeNames: true,
+      rows: slice.map(function (c) { return publicCase_(c, bs); })
     };
   });
 }
 
-/** Shape a case for the wire, masking PII unless the caller is district. */
-function publicCase_(c, withNames, bs) {
+/** Shape a case for the wire. Nothing is withheld. */
+function publicCase_(c, bs) {
   return {
     case_id: c.case_id,
     disease: c.disease,
@@ -304,7 +295,7 @@ function publicCase_(c, withNames, bs) {
     palika: c.palika,
     ward: c.ward,
     tole: c.tole,
-    patient_name: withNames ? c.patient_name : '••••••',
+    patient_name: c.patient_name,
     age: c.age,
     age_unit: c.age_unit,
     sex: c.sex,
@@ -328,11 +319,10 @@ function stripRowMeta_(row) {
  * A new case is refused unless the daily return has declared room for it — this
  * is what keeps the line list and the aggregate return in step.
  */
-function apiSaveCase(token, payload) {
+function apiSaveCase(payload) {
   return guard_(function () {
-    var s = requireSession(token);
     var p = payload || {};
-    var unit = requireWritableUnit(s, p.palika);
+    var unit = resolveUnit(p.palika);
 
     var errors = validateCase_(p);
     if (Object.keys(errors).length) {
@@ -353,7 +343,6 @@ function apiSaveCase(token, payload) {
       var all = readAll('Cases');
       var editing = p.case_id ? all.filter(function (c) { return c.case_id === p.case_id && !c.deleted; })[0] : null;
       if (p.case_id && !editing) throw userError('That case no longer exists.');
-      if (editing && s.role !== 'district' && editing.unit_id !== s.unit_id) throw userError('NOT_YOUR_PALIKA');
 
       /*
        * A case belongs to a "slot": one unit, one date, one disease. That slot
@@ -420,7 +409,7 @@ function apiSaveCase(token, payload) {
       if (editing) updateRowAt('Cases', editing._row, row);
       else insertRow('Cases', row);
 
-      audit(unit.unit_id, s.role, editing ? 'update_case' : 'save_case', row.case_id,
+      audit(unit.unit_id, 'open', editing ? 'update_case' : 'save_case', row.case_id,
         DISEASES[disease].label + ' ward ' + row.ward + ' ' + testDate +
         (movedSlot ? ' (moved from ' + editing.palika + '/' + editing.disease + '/' + editing.test_date + ')' : ''));
 
@@ -460,18 +449,16 @@ function validateCase_(f) {
 }
 
 /** Soft delete — the row stays in the sheet with deleted = TRUE for audit. */
-function apiDeleteCase(token, caseId) {
+function apiDeleteCase(caseId) {
   return guard_(function () {
-    var s = requireSession(token);
     return withLock(function () {
       var c = findByKey('Cases', 'case_id', caseId);
       if (!c || c.deleted) throw userError('That case no longer exists.');
-      if (s.role !== 'district' && c.unit_id !== s.unit_id) throw userError('NOT_YOUR_PALIKA');
 
       updateRowAt('Cases', c._row, Object.assign(stripRowMeta_(c), {
         deleted: true, updated_at: nowStamp()
       }));
-      audit(c.unit_id, s.role, 'delete_case', c.case_id, 'soft deleted');
+      audit(c.unit_id, 'open', 'delete_case', c.case_id, 'soft deleted');
 
       return {
         deleted: true,
@@ -483,10 +470,9 @@ function apiDeleteCase(token, caseId) {
   });
 }
 
-/** Outcome is a district-level clinical judgement, so district session only. */
-function apiSetOutcome(token, caseId, outcome) {
+/** Outcome is a clinical judgement. Anyone may record it. */
+function apiSetOutcome(caseId, outcome) {
   return guard_(function () {
-    var s = requireDistrict(token);
     if (!OUTCOMES[outcome]) throw userError('Unknown outcome.');
     return withLock(function () {
       var c = findByKey('Cases', 'case_id', caseId);
@@ -494,7 +480,7 @@ function apiSetOutcome(token, caseId, outcome) {
       updateRowAt('Cases', c._row, Object.assign(stripRowMeta_(c), {
         outcome: outcome, updated_at: nowStamp()
       }));
-      audit('DISTRICT', s.role, 'set_outcome', c.case_id, outcome);
+      audit(c.unit_id, 'open', 'set_outcome', c.case_id, outcome);
       return { case_id: c.case_id, outcome: outcome };
     });
   });
@@ -503,16 +489,13 @@ function apiSetOutcome(token, caseId, outcome) {
 /* ------------------------------------------------------------ dashboard -- */
 
 /**
- * Aggregate figures for the public dashboard. Contains no patient-level data,
- * so any signed-in role may call it.
+ * Aggregate figures for the dashboard. Contains no patient-level data.
  *
  * @param {string} range 'today' | '7' | '30' | 'all'
  * @param {string} scope palika name or 'all'
  */
-function apiDashboard(token, range, scope) {
+function apiDashboard(range, scope) {
   return guard_(function () {
-    requireSession(token);
-
     var pulses = readAll('Pulses');
     var cases = readAll('Cases').filter(function (c) { return !c.deleted; });
     var today = todayIso();
@@ -633,12 +616,11 @@ function completenessFor_(pulses, date) {
 
 /**
  * Server-side CSV generation. Returning text (not a file) keeps the download in
- * the browser and avoids needing Drive scopes. District-only for anything with
- * names on it.
+ * the browser and avoids needing Drive scopes. Every export, including the one
+ * carrying patient names, is available to anyone.
  */
-function apiExport(token, what, opts) {
+function apiExport(what, opts) {
   return guard_(function () {
-    var s = requireSession(token);
     var o = opts || {};
     var bs = bsTable();
     var lines = [];
@@ -657,7 +639,7 @@ function apiExport(token, what, opts) {
 
     } else if (what === 'summary') {
       filename = 'palika-summary-' + todayIso() + '.csv';
-      var dash = apiDashboard(token, o.range || '30', o.scope || 'all');
+      var dash = apiDashboard(o.range || '30', o.scope || 'all');
       if (!dash.ok) throw userError(dash.error);
       lines.push(csvLine(['Disease', 'Palika', 'Tests (' + dash.data.rangeLabel + ')',
         'Tests cumulative', 'Positive (' + dash.data.rangeLabel + ')', 'Cases cumulative']));
@@ -669,8 +651,6 @@ function apiExport(token, what, opts) {
       });
 
     } else if (what === 'linelist') {
-      // Patient names leave the system only for district staff.
-      requireDistrict(token);
       filename = 'line-list-' + todayIso() + '.csv';
       lines.push(csvLine(['case_id', 'disease', 'palika', 'ward', 'tole', 'patient_name',
         'age', 'age_unit', 'sex', 'test_type', 'test_date', 'test_date_bs', 'outcome', 'reporter']));
@@ -689,17 +669,16 @@ function apiExport(token, what, opts) {
       throw userError('Unknown export.');
     }
 
-    audit(s.unit_id || 'DISTRICT', s.role, 'export', what, lines.length - 1 + ' rows');
+    audit(o.scope && o.scope !== 'all' ? o.scope : 'ALL', 'open', 'export', what,
+      lines.length - 1 + ' rows');
     return { filename: filename, csv: lines.join('\r\n') };
   });
 }
 
 /* ------------------------------------------------- district admin views -- */
 
-/** The weekly data-quality report, exposed to the district screen. */
-function apiDataQuality(token) {
-  return guard_(function () {
-    requireDistrict(token);
-    return dataQualityReport();
+/** The weekly data-quality report. */
+function apiDataQuality() {
+  return guard_(function () {    return dataQualityReport();
   });
 }
