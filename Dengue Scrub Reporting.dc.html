@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&amp;family=Noto+Sans+Devanagari:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { background: #eef1f6; color: #1b1f2a; font-family: 'Source Sans 3', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: #003893; text-decoration: none; }
+  a:hover { color: #002a6e; text-decoration: underline; }
+  input, select, textarea, button { font-family: inherit; font-size: inherit; color: inherit; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid #003893; outline-offset: 1px; }
+  @media (max-width: 900px) {
+    [data-shell] { flex-direction: column !important; }
+    [data-side] { width: auto !important; min-height: 0 !important; position: static !important; border-right: none !important; border-bottom: 1px solid #dfe3ea !important; }
+    [data-nav] { flex-direction: row !important; overflow-x: auto !important; padding: 8px !important; }
+    [data-nav] > * { flex: 0 0 auto !important; }
+    [data-subnav] { flex-direction: row !important; margin: 0 !important; padding-left: 0 !important; border-left: none !important; }
+    [data-side-foot] { padding: 12px 16px !important; }
+    [data-main] { padding: 18px 14px 60px !important; }
+    [data-masthead] { padding: 12px 14px !important; gap: 12px !important; }
+    [data-masthead] img { width: 44px !important; height: 44px !important; }
+    [data-masthead] > div:last-child { margin-left: 0 !important; text-align: left !important; }
+    [data-util], [data-foot], [data-notice] { padding-left: 14px !important; padding-right: 14px !important; }
+    [data-util] { flex-direction: column !important; align-items: flex-start !important; gap: 3px !important; }
+    input, select, textarea { font-size: 16px !important; }
+  }
+  @media print {
+    [data-util], [data-side], [data-foot], [data-notice], [data-noprint] { display: none !important; }
+    [data-main] { padding: 0 !important; }
+    body { background: #ffffff; }
+    section, div { break-inside: avoid; }
+  }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#eef1f6">
+
+  <div style="height:5px; background:#dc143c"></div>
+
+  <div data-util="" style="background:#002a6e; color:#c3cfe6; padding:6px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; font-size:12px">
+    <span style="font-family:'Noto Sans Devanagari',sans-serif">{{ todayBsLong }} · आ.व. २०८२/८३</span>
+    <span style="display:flex; align-items:center; gap:14px; flex-wrap:wrap">
+      <span>{{ todayLabel }}</span>
+      <span style="color:#7f93bd">|</span>
+      <span>Focal person · {{ currentPalika }}</span>
+    </span>
+  </div>
+
+  <header data-masthead="" style="background:#ffffff; padding:14px 28px; border-bottom:3px solid #003893; display:flex; align-items:center; gap:16px; flex-wrap:wrap">
+    <img src="uploads/logo.png" alt="Government of Nepal emblem" style="width:56px; height:56px; flex:0 0 auto; object-fit:contain">
+    <div style="min-width:0">
+      <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12.5px; color:#8f1a2b; font-weight:600; letter-spacing:.01em">नेपाल सरकार · स्वास्थ्य तथा जनसंख्या मन्त्रालय</div>
+      <div style="font-size:19px; font-weight:700; color:#003893; line-height:1.25; margin-top:2px">VBD Surveillance · Vector-Borne Disease Surveillance</div>
+      <div style="font-size:12.5px; color:#5a6478; margin-top:2px">Health Office Sankhuwasabha · Koshi Province</div>
+    </div>
+    <div style="margin-left:auto; text-align:right; font-size:12.5px; color:#5a6478; line-height:1.6">
+      <span style="display:inline-block; padding:4px 10px; border-radius:2px; background:#e6ecf7; color:#002a6e; font-weight:600; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase">Daily reporting system</span><br>
+      {{ todayLabel }}
+    </div>
+  </header>
+
+  <div data-notice="" style="background:#fdf0f1; border-bottom:1px solid #f6d5d8; padding:9px 28px; font-size:13px; color:#8f1a2b; display:flex; align-items:center; gap:10px">
+    <span style="flex:0 0 auto; padding:2px 8px; background:#dc143c; color:#ffffff; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border-radius:2px">Notice</span>
+    <span>{{ noticeText }}</span>
+  </div>
+
+  <div data-shell="" style="display:flex; align-items:flex-start; background:#eef1f6">
+
+  <aside data-side="" style="width:246px; flex:0 0 auto; position:sticky; top:0; min-height:100vh; background:#ffffff; border-right:1px solid #dfe3ea; display:flex; flex-direction:column">
+    <div style="padding:13px 20px 11px; background:#003893; color:#ffffff; font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:600">Menu <span style="font-family:'Noto Sans Devanagari',sans-serif; letter-spacing:0; text-transform:none; color:#b8c5e2; font-weight:400">मेनु</span></div>
+
+    <nav data-nav="" style="display:flex; flex-direction:column; gap:2px; padding:14px 12px">
+      <button type="button" onClick="{{ navDashboard.onClick }}" style="display:flex; align-items:center; gap:10px; text-align:left; width:100%; min-height:44px; padding:10px 12px; border:none; border-radius:2px; cursor:pointer; background: {{ navDashboard.bg }}; color: {{ navDashboard.color }}" style-hover="background:#eef0f5">
+        <span style="width:6px; height:6px; border-radius:50%; flex:0 0 auto; background:#8e97a9"></span>
+        <span style="display:flex; flex-direction:column; gap:1px; min-width:0">
+          <span style="font-size:14px; font-weight:600; white-space:nowrap">Dashboard</span>
+          <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:11px; opacity:.7; white-space:nowrap">ड्यासबोर्ड</span>
+        </span>
+      </button>
+
+      <div style="display:flex; flex-direction:column; gap:2px">
+        <button type="button" onClick="{{ onToggleReporting }}" style="display:flex; align-items:center; gap:10px; text-align:left; width:100%; min-height:44px; padding:10px 12px; border:none; border-radius:2px; cursor:pointer; background: {{ reportingBg }}; color: {{ reportingColor }}" style-hover="background:#eef0f5">
+          <span style="width:6px; height:6px; border-radius:50%; flex:0 0 auto; background:#003893"></span>
+          <span style="display:flex; flex-direction:column; gap:1px; min-width:0; flex:1">
+            <span style="font-size:14px; font-weight:600; white-space:nowrap">Reporting</span>
+            <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:11px; opacity:.7; white-space:nowrap">रिपोर्टिङ</span>
+          </span>
+          <span style="font-size:11px; color:#6f7889; transform: {{ chevronTransform }}; transition:transform .16s ease">▼</span>
+        </button>
+        <sc-if value="{{ reportingOpen }}" hint-placeholder-val="{{ true }}">
+          <div data-subnav="" style="display:flex; flex-direction:column; gap:2px; margin:2px 0 4px 21px; padding-left:11px; border-left:1px solid #dfe3ea">
+            <sc-for list="{{ reportingItems }}" as="sub" hint-placeholder-count="2">
+              <button type="button" onClick="{{ sub.onClick }}" style="display:flex; align-items:center; gap:9px; text-align:left; width:100%; min-height:44px; padding:9px 10px; border:none; border-radius:2px; cursor:pointer; background: {{ sub.bg }}; color: {{ sub.color }}" style-hover="background:#eef0f5">
+                <span style="width:6px; height:6px; border-radius:50%; flex:0 0 auto; background: {{ sub.dot }}"></span>
+                <span style="display:flex; flex-direction:column; gap:1px; min-width:0">
+                  <span style="font-size:13.5px; font-weight:600; white-space:nowrap">{{ sub.label }}</span>
+                  <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:11px; opacity:.7; white-space:nowrap">{{ sub.labelNe }}</span>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <button type="button" onClick="{{ navLineList.onClick }}" style="display:flex; align-items:center; gap:10px; text-align:left; width:100%; min-height:44px; padding:10px 12px; border:none; border-radius:2px; cursor:pointer; background: {{ navLineList.bg }}; color: {{ navLineList.color }}" style-hover="background:#eef0f5">
+        <span style="width:6px; height:6px; border-radius:50%; flex:0 0 auto; background:#8e97a9"></span>
+        <span style="display:flex; flex-direction:column; gap:1px; min-width:0">
+          <span style="font-size:14px; font-weight:600; white-space:nowrap">Line list</span>
+          <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:11px; opacity:.7; white-space:nowrap">लाइन लिस्ट</span>
+        </span>
+      </button>
+
+      <button type="button" onClick="{{ navOutcome.onClick }}" style="display:flex; align-items:center; gap:10px; text-align:left; width:100%; min-height:44px; padding:10px 12px; border:none; border-radius:2px; cursor:pointer; background: {{ navOutcome.bg }}; color: {{ navOutcome.color }}" style-hover="background:#eef0f5">
+        <span style="width:6px; height:6px; border-radius:50%; flex:0 0 auto; background:#8e97a9"></span>
+        <span style="display:flex; flex-direction:column; gap:1px; min-width:0">
+          <span style="font-size:14px; font-weight:600; white-space:nowrap">Outcome</span>
+          <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:11px; opacity:.7; white-space:nowrap">नतिजा</span>
+        </span>
+      </button>
+    </nav>
+
+    <div data-side-foot="" style="margin-top:auto; padding:16px 20px 22px; border-top:1px solid #eef0f5">
+      <label style="display:block; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#6f7889; font-weight:600; margin-bottom:6px">Viewing <span style="font-family:'Noto Sans Devanagari',sans-serif; letter-spacing:0; text-transform:none; font-weight:400; color:#8e97a9">क्षेत्र</span></label>
+      <select value="{{ scope }}" onChange="{{ onScope }}" style="width:100%; min-height:44px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13px">
+        <option value="all">Sankhuwasabha District — all</option>
+        <sc-for list="{{ palikaOptions }}" as="p" hint-placeholder-count="10">
+          <option value="{{ p }}">{{ p }}</option>
+        </sc-for>
+      </select>
+      <div style="font-size:12px; color:#7d879b; margin-top:10px; line-height:1.5">Focal person · {{ todayLabel }}</div>
+    </div>
+  </aside>
+
+  <main data-main="" style="flex:1; min-width:0; padding:34px 40px 90px">
+
+    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:11px 16px; margin-bottom:22px; background:#ffffff; border:1px solid #dfe3ea; border-left:4px solid #003893; border-radius:3px">
+      <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">Viewing</span>
+      <span style="font-size:15px; font-weight:700; color:#003893">{{ scopeLabel }}</span>
+      <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12.5px; color:#5a6478">{{ scopeLabelNe }}</span>
+      <sc-if value="{{ isDistrictScope }}" hint-placeholder-val="{{ true }}">
+        <span style="font-size:12.5px; color:#7d879b; margin-left:auto">Pick a palika in the sidebar to view it alone.</span>
+      </sc-if>
+      <sc-if value="{{ isPalikaScope }}" hint-placeholder-val="{{ false }}">
+        <button data-noprint="" type="button" onClick="{{ onClearScope }}" style="margin-left:auto; min-height:36px; padding:7px 13px; border:1px solid #003893; border-radius:2px; background:#ffffff; color:#003893; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="background:#003893; color:#ffffff">View whole district</button>
+      </sc-if>
+    </div>
+
+
+    <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <header style="display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:18px">
+          <div>
+            <h1 style="margin:0; font-size:27px; font-weight:700; letter-spacing:-.01em">District dashboard</h1>
+            <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:14px; color:#5a6478; margin-top:5px">जिल्ला ड्यासबोर्ड · सार्वजनिक</div>
+          </div>
+          <div style="font-size:13px; color:#5a6478; text-align:right; line-height:1.6">
+            Cumulative = all data to date<br>
+            <span style="color:#8e97a9">Last updated {{ todayLabel }} · {{ todayBs }}</span>
+          </div>
+        </header>
+
+        <section data-noprint="" style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; padding:14px 18px; margin-bottom:22px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:18px">
+          <div>
+            <div style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889; margin-bottom:7px">Period <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; letter-spacing:0; text-transform:none; color:#8e97a9">अवधि</span></div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap">
+              <sc-for list="{{ rangeOptions }}" as="r" hint-placeholder-count="4">
+                <button type="button" onClick="{{ r.onClick }}" style="min-height:38px; padding:8px 14px; border:1px solid {{ r.border }}; border-radius:2px; background: {{ r.bg }}; color: {{ r.color }}; font-size:13px; font-weight:600; cursor:pointer">{{ r.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <label style="display:flex; flex-direction:column; gap:7px; min-width:220px">
+            <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">Palika <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; letter-spacing:0; text-transform:none; color:#8e97a9">पालिका</span></span>
+            <select value="{{ scope }}" onChange="{{ onScope }}" style="min-height:38px; padding:8px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13.5px">
+              <option value="all">Sankhuwasabha District — all</option>
+              <sc-for list="{{ palikaOptions }}" as="p" hint-placeholder-count="10">
+                <option value="{{ p }}">{{ p }}</option>
+              </sc-for>
+            </select>
+          </label>
+          <div style="margin-left:auto; display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end">
+            <button type="button" onClick="{{ onExportSummary }}" style="min-height:38px; padding:9px 14px; border:1px solid #003893; border-radius:2px; background:#ffffff; color:#003893; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#003893; color:#ffffff">Download summary (CSV)</button>
+            <button type="button" onClick="{{ onExportPulses }}" style="min-height:38px; padding:9px 14px; border:1px solid #003893; border-radius:2px; background:#ffffff; color:#003893; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#003893; color:#ffffff">Download daily numbers (CSV)</button>
+            <button type="button" onClick="{{ onPrint }}" style="min-height:38px; padding:9px 14px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color:#333c4d; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#eef0f5">Print / PDF</button>
+          </div>
+          <div style="flex:1 0 100%; font-size:12.5px; color:#5a6478">Showing <strong>{{ rangeLabel }}</strong> · {{ dashScopeLabel }}. Cumulative columns always cover all data to date.</div>
+        </section>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(520px, 1fr)); gap:26px; align-items:start">
+          <sc-for list="{{ boards }}" as="b" hint-placeholder-count="2">
+            <section style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; overflow:hidden">
+              <div style="display:flex; align-items:center; gap:10px; padding:12px 18px; background: {{ b.accent }}; color:#ffffff">
+                <div>
+                  <div style="font-size:15px; font-weight:700; letter-spacing:.01em">{{ b.label }}</div>
+                  <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12px; opacity:.85">{{ b.labelNe }}</div>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(118px,1fr)); gap:1px; background:#eef0f5">
+                <sc-for list="{{ b.cards }}" as="c" hint-placeholder-count="4">
+                  <div style="background:#ffffff; padding:16px 18px">
+                    <div style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; letter-spacing:-.02em; color: {{ c.color }}">{{ c.value }}</div>
+                    <div style="font-size:12px; font-weight:600; color:#333c4d; margin-top:6px; line-height:1.35">{{ c.label }}</div>
+                    <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:11px; color:#7d879b; line-height:1.5">{{ c.labelNe }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="padding:20px 20px 6px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px">
+                  <div style="font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#333c4d">Epidemic curve · positives per day</div>
+                  <div style="font-size:12px; color:#7d879b">{{ b.curveLabel }}</div>
+                </div>
+                <div style="display:flex; gap:8px">
+                  <div style="width:26px; height:132px; display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#8e97a9">
+                    <span>{{ b.yMax }}</span>
+                    <span>{{ b.yMid }}</span>
+                    <span>0</span>
+                  </div>
+                  <div style="flex:1; min-width:0; position:relative; height:132px; display:flex; align-items:flex-end; gap:3px; padding-bottom:1px; border-bottom:1px solid #dfe3ea; border-left:1px solid #dfe3ea">
+                    <sc-for list="{{ b.bars }}" as="bar" hint-placeholder-count="30">
+                      <div title="{{ bar.tip }}" style="flex:1; min-width:0; display:flex; align-items:flex-end; justify-content:center; height:100%">
+                        <div style="width:100%; background: {{ bar.fill }}; height: {{ bar.h }}"></div>
+                      </div>
+                    </sc-for>
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">
+                      <polyline points="{{ b.avgPts }}" fill="none" stroke="{{ b.accent }}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round" opacity="0.85"></polyline>
+                    </svg>
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin:7px 0 0 34px; font-size:10.5px; color:#8e97a9; font-family:'Noto Sans Devanagari',sans-serif">
+                  <sc-for list="{{ b.ticks }}" as="t" hint-placeholder-count="4">
+                    <span>{{ t }}</span>
+                  </sc-for>
+                </div>
+                <div style="display:flex; align-items:center; gap:14px; margin-top:10px; font-size:11.5px; color:#6f7889">
+                  <span style="display:flex; align-items:center; gap:6px"><span style="width:11px; height:9px; background: {{ b.accentSoft }}"></span>daily positives</span>
+                  <span style="display:flex; align-items:center; gap:6px"><span style="width:14px; height:2px; background: {{ b.accent }}"></span>7-day average</span>
+                </div>
+              </div>
+
+              <div style="padding:20px">
+                <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px">
+                  <div style="font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#333c4d">By palika</div>
+                  <button data-noprint="" type="button" onClick="{{ b.onExport }}" style="min-height:34px; padding:6px 12px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color:#333c4d; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="background:#eef0f5">Download table (CSV)</button>
+                </div>
+                <div style="overflow-x:auto; border:1px solid #e5e9f0; border-radius:3px">
+                  <table style="width:100%; border-collapse:collapse; font-size:13px">
+                    <thead>
+                      <tr style="background:#003893">
+                        <th style="text-align:left; padding:10px 12px; font-weight:600; color:#ffffff; white-space:nowrap">Palika</th>
+                        <th style="text-align:right; padding:10px 8px; font-weight:600; color:#ffffff; white-space:nowrap">Tests<br><span style="font-weight:400; color:#b8c5e2; font-size:11px">{{ rangeShort }}</span></th>
+                        <th style="text-align:right; padding:10px 8px; font-weight:600; color:#ffffff; white-space:nowrap">Tests<br><span style="font-weight:400; color:#b8c5e2; font-size:11px">cumulative</span></th>
+                        <th style="text-align:right; padding:10px 8px; font-weight:600; color:#ffffff; white-space:nowrap">Positive<br><span style="font-weight:400; color:#b8c5e2; font-size:11px">{{ rangeShort }}</span></th>
+                        <th style="text-align:right; padding:10px 12px; font-weight:600; color:#ffffff; white-space:nowrap">Cases<br><span style="font-weight:400; color:#b8c5e2; font-size:11px">cumulative</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <sc-for list="{{ b.rows }}" as="r" hint-placeholder-count="0">
+                        <tr style="border-bottom:1px solid #f0f3f8">
+                          <td style="padding:9px 12px; color:#22283a">
+                            <span style="display:flex; align-items:center; gap:7px">
+                              <span title="{{ r.statusTitle }}" style="width:5px; height:5px; border-radius:50%; flex:0 0 auto; background: {{ r.statusDot }}"></span>{{ r.palika }}
+                            </span>
+                          </td>
+                          <td style="padding:9px 8px; text-align:right; font-family:'IBM Plex Mono',monospace; color:#4d5768">{{ r.testsRange }}</td>
+                          <td style="padding:9px 8px; text-align:right; font-family:'IBM Plex Mono',monospace; color:#4d5768">{{ r.testsCum }}</td>
+                          <td style="padding:9px 8px; text-align:right; font-family:'IBM Plex Mono',monospace; color: {{ r.posColor }}; font-weight:500">{{ r.posRange }}</td>
+                          <td style="padding:9px 12px; text-align:right; font-family:'IBM Plex Mono',monospace; color:#22283a; font-weight:500">{{ r.posCum }}</td>
+                        </tr>
+                      </sc-for>
+                      <tr style="background:#e6ecf7; font-weight:600">
+                        <td style="padding:11px 12px">Total <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#4d5768; font-size:11px">जम्मा</span></td>
+                        <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ b.total.testsRange }}</td>
+                        <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ b.total.testsCum }}</td>
+                        <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ b.total.posRange }}</td>
+                        <td style="padding:11px 12px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ b.total.posCum }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </sc-for>
+        </div>
+
+        <section style="margin-top:26px; background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; padding:22px 24px">
+          <div style="display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:18px">
+            <div>
+              <div style="font-size:16px; font-weight:700">Reporting completeness · today</div>
+              <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12px; color:#5a6478; margin-top:3px">आजको रिपोर्टिङ पूर्णता</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:14px">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600">{{ completenessLabel }}</div>
+              <button data-noprint="" type="button" onClick="{{ onCopyNonReporters }}" style="min-height:40px; padding:9px 14px; border:1px solid #003893; border-radius:2px; background:#ffffff; color:#003893; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#003893; color:#ffffff">{{ copyLabel }}</button>
+            </div>
+          </div>
+          <div style="height:7px; border-radius:2px; background:#eef0f5; overflow:hidden; margin-bottom:20px">
+            <div style="height:100%; background:#003893; width: {{ completenessPct }}"></div>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:22px">
+            <div>
+              <div style="font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#1f6d4a; margin-bottom:10px">Reported <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; text-transform:none; letter-spacing:0; color:#5a6478">रिपोर्ट गरेको</span></div>
+              <div style="display:flex; flex-wrap:wrap; gap:7px">
+                <sc-for list="{{ reported }}" as="p" hint-placeholder-count="7">
+                  <span style="padding:6px 11px; border-radius:2px; background:#eef5f0; border:1px solid #cfe3d7; color:#1c5e42; font-size:12.5px">{{ p }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#99202e; margin-bottom:10px">Not yet reported <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; text-transform:none; letter-spacing:0; color:#5a6478">रिपोर्ट नगरेको</span></div>
+              <div style="display:flex; flex-wrap:wrap; gap:7px">
+                <sc-for list="{{ notReported }}" as="p" hint-placeholder-count="3">
+                  <span style="padding:6px 11px; border-radius:2px; background:#fdf0f1; border:1px solid #f6d5d8; color:#99202e; font-size:12.5px">{{ p }}</span>
+                </sc-for>
+              </div>
+              <sc-if value="{{ allReported }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:13px; color:#5a6478">All 10 palikas have reported today.</div>
+              </sc-if>
+            </div>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isReport }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:1180px">
+        <header style="margin-bottom:16px">
+          <h1 style="margin:0; font-size:27px; font-weight:700; letter-spacing:-.01em">{{ pageTitle }}</h1>
+          <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:14px; color:#5a6478; margin-top:5px">{{ pageTitleNe }} · {{ currentPalika }}</div>
+        </header>
+
+        <section style="background:#ffffff; border:1px solid #dfe3ea; border-left:4px solid {{ statusEdge }}; border-radius:3px; padding:14px 18px; margin-bottom:22px; display:flex; flex-wrap:wrap; align-items:center; gap:14px 26px">
+          <sc-for list="{{ statusItems }}" as="s" hint-placeholder-count="3">
+            <div style="min-width:150px">
+              <div style="font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#6f7889">{{ s.label }}</div>
+              <div style="font-size:14.5px; font-weight:600; color: {{ s.color }}; margin-top:3px">{{ s.value }}</div>
+            </div>
+          </sc-for>
+          <div data-noprint="" style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">
+            <button type="button" onClick="{{ onOtherStep }}" style="min-height:40px; padding:9px 15px; border:1px solid #003893; border-radius:2px; background:#ffffff; color:#003893; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#003893; color:#ffffff">{{ otherStepLabel }}</button>
+          </div>
+        </section>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:16px; margin-bottom:22px; background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; padding:16px 18px">
+          <label style="display:flex; flex-direction:column; gap:6px">
+            <span style="font-size:12.5px; font-weight:600; color:#333c4d">Report date <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">रिपोर्ट मिति</span></span>
+            <input type="date" value="{{ reportDate }}" onChange="{{ onReportDate }}" max="{{ today }}" style="min-height:44px; padding:10px 11px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px">
+            <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12.5px; color:#003893">{{ reportDateBs }}</span>
+          </label>
+          <label style="display:flex; flex-direction:column; gap:6px">
+            <span style="font-size:12.5px; font-weight:600; color:#333c4d">Palika <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">पालिका</span></span>
+            <select value="{{ currentPalika }}" onChange="{{ onPalika }}" style="min-height:44px; padding:10px 11px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px">
+              <sc-for list="{{ palikaOptions }}" as="p" hint-placeholder-count="10">
+                <option value="{{ p }}">{{ p }}</option>
+              </sc-for>
+            </select>
+            <span style="font-size:12.5px; color:#7d879b">Reporter: focal person</span>
+          </label>
+        </div>
+
+        <sc-if value="{{ isDaily }}" hint-placeholder-val="{{ true }}">
+          <section style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px">
+            <div style="padding:12px 20px; background:#003893; color:#ffffff">
+              <div style="font-size:15px; font-weight:700">Daily numbers · both diseases</div>
+              <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12px; opacity:.85; margin-top:2px">दैनिक विवरण · दुवै रोग</div>
+            </div>
+            <div style="padding:20px 22px 24px; display:flex; flex-direction:column; gap:22px">
+              <div style="font-size:12.5px; color:#5a6478; line-height:1.55">One row per palika per day covers both diseases — fill what applies and submit once. Totals are computed on save.</div>
+
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(330px,1fr)); gap:18px">
+                <sc-for list="{{ diseaseBlocks }}" as="db" hint-placeholder-count="2">
+                  <div style="border:1px solid #e5e9f0; border-radius:3px; overflow:hidden">
+                    <div style="padding:10px 14px; background: {{ db.accent }}; color:#ffffff; font-size:13.5px; font-weight:700">{{ db.label }} <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; opacity:.85; font-size:12px">{{ db.labelNe }}</span></div>
+                    <div style="padding:16px 14px; display:flex; flex-direction:column; gap:14px">
+                      <label style="display:flex; flex-direction:column; gap:6px; max-width:220px">
+                        <span style="font-size:12.5px; font-weight:600; color:#333c4d">Suspected cases seen <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">शंकास्पद</span></span>
+                        <input type="number" min="0" inputmode="numeric" value="{{ db.suspects.value }}" onChange="{{ db.suspects.onChange }}" placeholder="0" style="min-height:44px; padding:10px 11px; border:1px solid {{ db.suspects.border }}; border-radius:2px; background:#fbfcfe; font-size:15px; font-family:'IBM Plex Mono',monospace">
+                      </label>
+                      <div>
+                        <div style="font-size:12.5px; font-weight:600; color:#333c4d; margin-bottom:8px">Tests done, by test type <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">परीक्षण</span></div>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:10px">
+                          <sc-for list="{{ db.fields }}" as="f" hint-placeholder-count="4">
+                            <label style="display:flex; flex-direction:column; gap:5px">
+                              <span style="font-size:12px; font-weight:600; color:#4d5768">{{ f.label }}</span>
+                              <input type="number" min="0" inputmode="numeric" value="{{ f.value }}" onChange="{{ f.onChange }}" placeholder="0" style="min-height:44px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:15px; font-family:'IBM Plex Mono',monospace">
+                            </label>
+                          </sc-for>
+                        </div>
+                      </div>
+                      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border-radius:2px; background:#f2f5fa; border:1px solid #eef0f5">
+                        <span style="font-size:12.5px; color:#4d5768">Total tests</span>
+                        <span style="font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600">{{ db.total }}</span>
+                      </div>
+                      <label style="display:flex; flex-direction:column; gap:6px; max-width:220px">
+                        <span style="font-size:12.5px; font-weight:600; color:#333c4d">Positive today <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">आज पोजिटिभ</span></span>
+                        <input type="number" min="0" inputmode="numeric" value="{{ db.positives.value }}" onChange="{{ db.positives.onChange }}" placeholder="0" style="min-height:44px; padding:10px 11px; border:1px solid {{ db.positives.border }}; border-radius:2px; background:#fbfcfe; font-size:15px; font-family:'IBM Plex Mono',monospace" />
+                        <span style="font-size:12px; color: {{ db.reconcileColor }}">{{ db.reconcile }}</span>
+                      </label>
+                      <sc-if value="{{ db.hasMessage }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:9px 12px; border-radius:2px; background: {{ db.msgBg }}; border:1px solid {{ db.msgBorder }}; color: {{ db.msgColor }}; font-size:12.5px; line-height:1.5">{{ db.message }}</div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+
+              
+
+              <label style="display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:12.5px; font-weight:600; color:#333c4d">Remarks · optional <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">कैफियत</span></span>
+                <textarea rows="2" value="{{ remarks }}" onChange="{{ onRemarks }}" placeholder="Stockout, referral, anything the district should know" style="padding:10px 11px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px; resize:vertical"></textarea>
+              </label>
+
+              <div style="display:flex; flex-wrap:wrap; align-items:center; gap:14px">
+                <button type="button" onClick="{{ onSubmitPulse }}" disabled="{{ pulseBlocked }}" style="min-height:48px; padding:13px 24px; border:none; border-radius:2px; background: {{ pulseBtnBg }}; color:#ffffff; font-size:15px; font-weight:600; cursor: {{ pulseBtnCursor }}" style-hover="background:#002d75">{{ pulseButtonLabel }}</button>
+                <span style="font-size:12.5px; color: {{ pulseNoteColor }}; line-height:1.5; flex:1; min-width:200px">{{ pulseNote }}</span>
+              </div>
+            </div>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{ isCases }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(400px,1fr)); gap:22px; align-items:start">
+            <section style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px">
+              <div style="padding:12px 20px; background: {{ caseHeaderBg }}; color:#ffffff">
+                <div style="font-size:15px; font-weight:700">{{ caseFormTitle }}</div>
+                <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12px; opacity:.85; margin-top:2px">पोजिटिभ बिरामी</div>
+              </div>
+              <div style="padding:20px 22px 24px; display:flex; flex-direction:column; gap:16px">
+                <div>
+                  <div style="font-size:12.5px; font-weight:600; color:#333c4d; margin-bottom:8px">Disease <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">रोग</span></div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap">
+                    <sc-for list="{{ diseaseToggle }}" as="t" hint-placeholder-count="2">
+                      <button type="button" onClick="{{ t.onClick }}" style="min-height:44px; padding:10px 16px; border:1px solid {{ t.border }}; border-radius:2px; background: {{ t.bg }}; color: {{ t.color }}; font-size:13.5px; font-weight:600; cursor:pointer">{{ t.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="padding:11px 13px; border-radius:2px; background: {{ quotaBg }}; border:1px solid {{ quotaBorder }}; color: {{ quotaColor }}; font-size:12.5px; line-height:1.55">{{ quotaText }}</div>
+                <div style="font-size:12.5px; color:#5a6478; line-height:1.55">Every row saved here counts as a positive case. Patient names stay on the district line list and are never published.</div>
+
+                <label style="display:flex; flex-direction:column; gap:6px">
+                  <span style="font-size:12.5px; font-weight:600; color:#333c4d">Patient name <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">बिरामीको नाम</span></span>
+                  <input type="text" value="{{ caseName }}" onChange="{{ onCaseName }}" placeholder="Full name" style="min-height:44px; padding:10px 11px; border:1px solid {{ err.name }}; border-radius:2px; background:#fbfcfe; font-size:14px">
+                  <sc-if value="{{ errMsg.name }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:12px; color:#b3261e">{{ errMsg.name }}</span>
+                  </sc-if>
+                </label>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:12px">
+                  <label style="display:flex; flex-direction:column; gap:6px">
+                    <span style="font-size:12.5px; font-weight:600; color:#333c4d">Age <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">उमेर</span></span>
+                    <input type="number" min="0" inputmode="numeric" value="{{ caseAge }}" onChange="{{ onCaseAge }}" placeholder="0" style="min-height:44px; padding:10px 11px; border:1px solid {{ err.age }}; border-radius:2px; background:#fbfcfe; font-size:15px; font-family:'IBM Plex Mono',monospace">
+                  </label>
+                  <label style="display:flex; flex-direction:column; gap:6px">
+                    <span style="font-size:12.5px; font-weight:600; color:#333c4d">Unit <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">एकाइ</span></span>
+                    <select value="{{ caseAgeUnit }}" onChange="{{ onCaseAgeUnit }}" style="min-height:44px; padding:10px 11px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px">
+                      <option value="years">Years · वर्ष</option>
+                      <option value="months">Months · महिना</option>
+                    </select>
+                  </label>
+                  <label style="display:flex; flex-direction:column; gap:6px">
+                    <span style="font-size:12.5px; font-weight:600; color:#333c4d">Sex <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">लिङ्ग</span></span>
+                    <select value="{{ caseSex }}" onChange="{{ onCaseSex }}" style="min-height:44px; padding:10px 11px; border:1px solid {{ err.sex }}; border-radius:2px; background:#fbfcfe; font-size:14px">
+                      <option value="">Select</option>
+                      <option value="Male">Male · पुरुष</option>
+                      <option value="Female">Female · महिला</option>
+                      <option value="Other">Other · अन्य</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:12px">
+                  <label style="display:flex; flex-direction:column; gap:6px">
+                    <span style="font-size:12.5px; font-weight:600; color:#333c4d">Ward no. <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">वडा नं.</span></span>
+                    <input type="number" min="1" inputmode="numeric" value="{{ caseWard }}" onChange="{{ onCaseWard }}" placeholder="1" style="min-height:44px; padding:10px 11px; border:1px solid {{ err.ward }}; border-radius:2px; background:#fbfcfe; font-size:15px; font-family:'IBM Plex Mono',monospace">
+                  </label>
+                  <label style="display:flex; flex-direction:column; gap:6px; grid-column:span 2">
+                    <span style="font-size:12.5px; font-weight:600; color:#333c4d">Tole / settlement <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">टोल / बस्ती</span></span>
+                    <input type="text" value="{{ caseTole }}" onChange="{{ onCaseTole }}" placeholder="e.g. Tumlingtar Bazaar" style="min-height:44px; padding:10px 11px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px">
+                  </label>
+                </div>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px">
+                  <label style="display:flex; flex-direction:column; gap:6px">
+                    <span style="font-size:12.5px; font-weight:600; color:#333c4d">Test type <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">परीक्षणको प्रकार</span></span>
+                    <select value="{{ caseTestType }}" onChange="{{ onCaseTestType }}" style="min-height:44px; padding:10px 11px; border:1px solid {{ err.test }}; border-radius:2px; background:#fbfcfe; font-size:14px">
+                      <option value="">Select</option>
+                      <sc-for list="{{ caseTestTypes }}" as="t" hint-placeholder-count="4">
+                        <option value="{{ t }}">{{ t }}</option>
+                      </sc-for>
+                    </select>
+                  </label>
+                  <label style="display:flex; flex-direction:column; gap:6px">
+                    <span style="font-size:12.5px; font-weight:600; color:#333c4d">Test date <span style="font-family:'Noto Sans Devanagari',sans-serif; font-weight:400; color:#7d879b">परीक्षण मिति</span></span>
+                    <input type="date" value="{{ caseTestDate }}" onChange="{{ onCaseTestDate }}" max="{{ today }}" style="min-height:44px; padding:10px 11px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px">
+                    <span style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12.5px; color:#003893">{{ caseTestDateBs }}</span>
+                  </label>
+                </div>
+
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px">
+                  <button type="button" onClick="{{ onSubmitCase }}" style="min-height:48px; padding:13px 22px; border:none; border-radius:2px; background:#003893; color:#ffffff; font-size:15px; font-weight:600; cursor:pointer" style-hover="background:#002d75">{{ caseButtonLabel }}</button>
+                  <sc-if value="{{ isEditing }}" hint-placeholder-val="{{ false }}">
+                    <button type="button" onClick="{{ onCancelEdit }}" style="min-height:48px; padding:13px 18px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color:#333c4d; font-size:14px; font-weight:600; cursor:pointer" style-hover="background:#eef0f5">Cancel edit</button>
+                  </sc-if>
+                  <span style="font-size:12.5px; color: {{ caseNoteColor }}; line-height:1.5; flex:1; min-width:180px">{{ caseNote }}</span>
+                </div>
+              </div>
+            </section>
+
+            <section style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px">
+              <div style="padding:12px 20px; background:#002a6e; color:#ffffff; display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:space-between">
+                <div>
+                  <div style="font-size:15px; font-weight:700">Cases on this date · {{ dayCaseCount }}</div>
+                  <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:12px; opacity:.85; margin-top:2px">यो मितिका बिरामी</div>
+                </div>
+                <button data-noprint="" type="button" onClick="{{ onExportDayCases }}" style="min-height:36px; padding:7px 12px; border:1px solid #ffffff; border-radius:2px; background:transparent; color:#ffffff; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="background:#ffffff; color:#002a6e">Download (CSV)</button>
+              </div>
+              <div style="padding:16px 18px 20px; display:flex; flex-direction:column; gap:10px">
+                <sc-for list="{{ dayCases }}" as="c" hint-placeholder-count="3">
+                  <div style="border:1px solid #e5e9f0; border-left:3px solid {{ c.accent }}; border-radius:2px; padding:12px 14px; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; background: {{ c.rowBg }}">
+                    <div style="flex:1; min-width:170px">
+                      <div style="font-size:14px; font-weight:600; color:#22283a">{{ c.name }}</div>
+                      <div style="font-size:12.5px; color:#4d5768; margin-top:3px; line-height:1.5">{{ c.meta }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8e97a9; margin-top:3px">{{ c.id }} · {{ c.disease }}</div>
+                    </div>
+                    <div data-noprint="" style="display:flex; gap:7px">
+                      <button type="button" onClick="{{ c.onEdit }}" style="min-height:38px; padding:7px 13px; border:1px solid #003893; border-radius:2px; background:#ffffff; color:#003893; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="background:#003893; color:#ffffff">Edit</button>
+                      <button type="button" onClick="{{ c.onDelete }}" style="min-height:38px; padding:7px 13px; border:1px solid {{ c.delBorder }}; border-radius:2px; background: {{ c.delBg }}; color: {{ c.delColor }}; font-size:12.5px; font-weight:600; cursor:pointer">{{ c.delLabel }}</button>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ noDayCases }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:13px; color:#5a6478; padding:8px 0">No positive cases recorded for {{ currentPalika }} on this date.</div>
+                </sc-if>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isLineList }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <header style="margin-bottom:22px">
+          <h1 style="margin:0; font-size:27px; font-weight:700; letter-spacing:-.01em">Line list · positive cases</h1>
+          <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:14px; color:#5a6478; margin-top:5px">पोजिटिभ बिरामीको लाइन लिस्ट · जिल्ला मात्र</div>
+        </header>
+
+        <sc-if value="{{ locked }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:430px; background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; padding:26px">
+            <div style="font-size:16px; font-weight:700">District access code required</div>
+            <div style="font-size:13px; color:#5a6478; line-height:1.6; margin-top:8px">Patient-level detail is never reachable from the public dashboard. Enter the district code to view names.</div>
+            <div style="display:flex; gap:10px; margin-top:18px">
+              <input type="password" value="{{ codeValue }}" onChange="{{ onCode }}" placeholder="Access code" style="flex:1; min-height:46px; padding:11px 12px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px; letter-spacing:.1em">
+              <button type="button" onClick="{{ onUnlock }}" style="min-height:46px; padding:11px 20px; border:none; border-radius:2px; background:#003893; color:#ffffff; font-weight:600; cursor:pointer" style-hover="background:#002d75">Unlock</button>
+            </div>
+            <div style="font-size:12.5px; color: {{ codeNoteColor }}; margin-top:12px; line-height:1.5">{{ codeNote }}</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ unlocked }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <section data-noprint="" style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; padding:14px 18px; margin-bottom:18px; display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:14px 16px; align-items:end">
+              <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889; margin-bottom:7px">Disease</div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap">
+                  <sc-for list="{{ filterOptions }}" as="f" hint-placeholder-count="3">
+                    <button type="button" onClick="{{ f.onClick }}" style="min-height:40px; padding:9px 14px; border:1px solid {{ f.border }}; border-radius:2px; background: {{ f.bg }}; color: {{ f.color }}; font-size:13px; font-weight:600; cursor:pointer">{{ f.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <label style="display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">Palika</span>
+                <select value="{{ scope }}" onChange="{{ onScope }}" style="min-height:40px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13.5px">
+                  <option value="all">Sankhuwasabha District — all</option>
+                  <sc-for list="{{ palikaOptions }}" as="p" hint-placeholder-count="10">
+                    <option value="{{ p }}">{{ p }}</option>
+                  </sc-for>
+                </select>
+              </label>
+              <label style="display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">Test date from</span>
+                <input type="date" value="{{ llFrom }}" onChange="{{ onLlFrom }}" max="{{ today }}" style="min-height:40px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13.5px">
+              </label>
+              <label style="display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">to</span>
+                <input type="date" value="{{ llTo }}" onChange="{{ onLlTo }}" max="{{ today }}" style="min-height:40px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13.5px">
+              </label>
+              <label style="display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">Search name / tole</span>
+                <input type="search" value="{{ llQuery }}" onChange="{{ onLlQuery }}" placeholder="e.g. Rai, Tumlingtar" style="min-height:40px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13.5px">
+              </label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end">
+                <button type="button" onClick="{{ onResetFilters }}" style="min-height:40px; padding:9px 14px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color:#333c4d; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#eef0f5">Reset</button>
+                <button type="button" onClick="{{ onExportLineList }}" style="min-height:40px; padding:9px 14px; border:1px solid #003893; border-radius:2px; background:#003893; color:#ffffff; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#002d75">Download CSV</button>
+                <button type="button" onClick="{{ onPrint }}" style="min-height:40px; padding:9px 14px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color:#333c4d; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#eef0f5">Print / PDF</button>
+              </div>
+            </section>
+
+            <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px">
+              <div style="font-size:13px; color:#4d5768">{{ lineCountLabel }}</div>
+              <div data-noprint="" style="display:flex; align-items:center; gap:8px">
+                <button type="button" onClick="{{ onPrevPage }}" style="min-height:38px; padding:8px 14px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color: {{ prevColor }}; font-size:13px; font-weight:600; cursor:pointer">Previous</button>
+                <span style="font-size:13px; color:#4d5768">{{ pageLabel }}</span>
+                <button type="button" onClick="{{ onNextPage }}" style="min-height:38px; padding:8px 14px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color: {{ nextColor }}; font-size:13px; font-weight:600; cursor:pointer">Next</button>
+              </div>
+            </div>
+
+            <div style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; overflow:hidden">
+              <div style="overflow-x:auto">
+                <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:1000px">
+                  <thead>
+                    <tr style="background:#003893">
+                      <sc-for list="{{ lineHeaders }}" as="h" hint-placeholder-count="9">
+                        <th style="text-align:left; padding:11px 12px; font-weight:600; color:#ffffff; white-space:nowrap">{{ h }}</th>
+                      </sc-for>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <sc-for list="{{ lineRows }}" as="r" hint-placeholder-count="12">
+                      <tr style="border-bottom:1px solid #f0f3f8">
+                        <td style="padding:10px 12px; font-family:'IBM Plex Mono',monospace; color:#6f7889; white-space:nowrap">{{ r.id }}</td>
+                        <td style="padding:10px 12px; white-space:nowrap"><span style="padding:3px 9px; border-radius:2px; font-size:11.5px; font-weight:600; background: {{ r.tint }}; color: {{ r.accent }}">{{ r.disease }}</span></td>
+                        <td style="padding:10px 12px; color:#22283a; font-weight:600; white-space:nowrap">{{ r.name }}</td>
+                        <td style="padding:10px 12px; font-family:'IBM Plex Mono',monospace; color:#4d5768; white-space:nowrap">{{ r.age }}</td>
+                        <td style="padding:10px 12px; color:#4d5768">{{ r.sex }}</td>
+                        <td style="padding:10px 12px; color:#22283a; white-space:nowrap">{{ r.palika }}</td>
+                        <td style="padding:10px 12px; color:#4d5768; white-space:nowrap">{{ r.place }}</td>
+                        <td style="padding:10px 12px; color:#4d5768; white-space:nowrap">{{ r.testType }}</td>
+                        <td style="padding:10px 12px; white-space:nowrap">
+                          <span style="font-family:'Noto Sans Devanagari',sans-serif; color:#22283a">{{ r.testDateBs }}</span>
+                          <span style="font-family:'IBM Plex Mono',monospace; color:#8e97a9; font-size:11px; display:block">{{ r.testDate }}</span>
+                        </td>
+                      </tr>
+                    </sc-for>
+                    <sc-if value="{{ noLineRows }}" hint-placeholder-val="{{ false }}">
+                      <tr>
+                        <td colspan="9" style="padding:22px 12px; text-align:center; color:#5a6478; font-size:13px">No cases match these filters.</td>
+                      </tr>
+                    </sc-if>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isOutcome }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <header style="margin-bottom:22px">
+          <h1 style="margin:0; font-size:27px; font-weight:700; letter-spacing:-.01em">Outcome</h1>
+          <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:14px; color:#5a6478; margin-top:5px">बिरामीको नतिजा · जिल्ला मात्र</div>
+        </header>
+
+        <sc-if value="{{ locked }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:430px; background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; padding:26px">
+            <div style="font-size:16px; font-weight:700">District access code required</div>
+            <div style="font-size:13px; color:#5a6478; line-height:1.6; margin-top:8px">Outcome is patient-level detail — it uses the same access code as the line list.</div>
+            <div style="display:flex; gap:10px; margin-top:18px">
+              <input type="password" value="{{ codeValue }}" onChange="{{ onCode }}" placeholder="Access code" style="flex:1; min-height:46px; padding:11px 12px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:14px; letter-spacing:.1em">
+              <button type="button" onClick="{{ onUnlock }}" style="min-height:46px; padding:11px 20px; border:none; border-radius:2px; background:#003893; color:#ffffff; font-weight:600; cursor:pointer" style-hover="background:#002d75">Unlock</button>
+            </div>
+            <div style="font-size:12.5px; color: {{ codeNoteColor }}; margin-top:12px; line-height:1.5">{{ codeNote }}</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ unlocked }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:1px; background:#dfe3ea; border:1px solid #dfe3ea; border-radius:3px; margin-bottom:20px">
+              <sc-for list="{{ outcomeCards }}" as="c" hint-placeholder-count="4">
+                <div style="background:#ffffff; padding:16px 18px">
+                  <div style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; letter-spacing:-.02em; color: {{ c.color }}">{{ c.value }}</div>
+                  <div style="font-size:12px; font-weight:600; color:#333c4d; margin-top:6px; line-height:1.35">{{ c.label }}</div>
+                  <div style="font-family:'Noto Sans Devanagari',sans-serif; font-size:11px; color:#7d879b; line-height:1.5">{{ c.labelNe }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <section data-noprint="" style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; padding:14px 18px; margin-bottom:18px; display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:14px 16px; align-items:end">
+              <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889; margin-bottom:7px">Status</div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap">
+                  <sc-for list="{{ outcomeFilters }}" as="f" hint-placeholder-count="4">
+                    <button type="button" onClick="{{ f.onClick }}" style="min-height:40px; padding:9px 13px; border:1px solid {{ f.border }}; border-radius:2px; background: {{ f.bg }}; color: {{ f.color }}; font-size:13px; font-weight:600; cursor:pointer">{{ f.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889; margin-bottom:7px">Disease</div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap">
+                  <sc-for list="{{ filterOptions }}" as="f" hint-placeholder-count="3">
+                    <button type="button" onClick="{{ f.onClick }}" style="min-height:40px; padding:9px 13px; border:1px solid {{ f.border }}; border-radius:2px; background: {{ f.bg }}; color: {{ f.color }}; font-size:13px; font-weight:600; cursor:pointer">{{ f.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <label style="display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">Palika</span>
+                <select value="{{ scope }}" onChange="{{ onScope }}" style="min-height:40px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13.5px">
+                  <option value="all">Sankhuwasabha District — all</option>
+                  <sc-for list="{{ palikaOptions }}" as="p" hint-placeholder-count="10">
+                    <option value="{{ p }}">{{ p }}</option>
+                  </sc-for>
+                </select>
+              </label>
+              <label style="display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6f7889">Search name / tole</span>
+                <input type="search" value="{{ llQuery }}" onChange="{{ onLlQuery }}" placeholder="e.g. Rai, Tumlingtar" style="min-height:40px; padding:9px 10px; border:1px solid #d3d9e3; border-radius:2px; background:#fbfcfe; font-size:13.5px">
+              </label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end">
+                <button type="button" onClick="{{ onExportOutcome }}" style="min-height:40px; padding:9px 14px; border:1px solid #003893; border-radius:2px; background:#003893; color:#ffffff; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#002d75">Download CSV</button>
+                <button type="button" onClick="{{ onPrint }}" style="min-height:40px; padding:9px 14px; border:1px solid #d3d9e3; border-radius:2px; background:#ffffff; color:#333c4d; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#eef0f5">Print / PDF</button>
+              </div>
+            </section>
+
+            <div style="font-size:13px; color:#4d5768; margin-bottom:12px">{{ outcomeCountLabel }}</div>
+
+            <div style="background:#ffffff; border:1px solid #dfe3ea; border-radius:3px; overflow:hidden">
+              <div style="overflow-x:auto">
+                <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:960px">
+                  <thead>
+                    <tr style="background:#003893">
+                      <sc-for list="{{ outcomeHeaders }}" as="h" hint-placeholder-count="7">
+                        <th style="text-align:left; padding:11px 12px; font-weight:600; color:#ffffff; white-space:nowrap">{{ h }}</th>
+                      </sc-for>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <sc-for list="{{ outcomeRows }}" as="r" hint-placeholder-count="12">
+                      <tr style="border-bottom:1px solid #f0f3f8">
+                        <td style="padding:10px 12px; font-family:'IBM Plex Mono',monospace; color:#6f7889; white-space:nowrap">{{ r.id }}</td>
+                        <td style="padding:10px 12px; white-space:nowrap"><span style="padding:3px 9px; border-radius:2px; font-size:11.5px; font-weight:600; background: {{ r.tint }}; color: {{ r.accent }}">{{ r.disease }}</span></td>
+                        <td style="padding:10px 12px; color:#22283a; font-weight:600; white-space:nowrap">{{ r.name }}</td>
+                        <td style="padding:10px 12px; color:#4d5768; white-space:nowrap">{{ r.who }}</td>
+                        <td style="padding:10px 12px; white-space:nowrap">
+                          <span style="font-family:'Noto Sans Devanagari',sans-serif; color:#22283a">{{ r.testDateBs }}</span>
+                          <span style="font-family:'IBM Plex Mono',monospace; color:#8e97a9; font-size:11px; display:block">{{ r.testDate }}</span>
+                        </td>
+                        <td style="padding:10px 12px; white-space:nowrap"><span style="padding:4px 10px; border-radius:2px; font-size:12px; font-weight:600; background: {{ r.pillBg }}; border:1px solid {{ r.pillBorder }}; color: {{ r.pillColor }}">{{ r.statusLabel }}</span></td>
+                        <td data-noprint="" style="padding:8px 12px; white-space:nowrap">
+                          <span style="display:flex; gap:6px; align-items:center">
+                            <sc-for list="{{ r.actions }}" as="a" hint-placeholder-count="3">
+                              <button type="button" onClick="{{ a.onClick }}" title="{{ a.title }}" style="min-height:36px; padding:6px 11px; border:1px solid {{ a.border }}; border-radius:2px; background: {{ a.bg }}; color: {{ a.color }}; font-size:12.5px; font-weight:600; cursor:pointer">{{ a.label }}</button>
+                            </sc-for>
+                          </span>
+                        </td>
+                      </tr>
+                    </sc-for>
+                    <sc-if value="{{ noOutcomeRows }}" hint-placeholder-val="{{ false }}">
+                      <tr>
+                        <td colspan="7" style="padding:22px 12px; text-align:center; color:#5a6478; font-size:13px">No cases match these filters.</td>
+                      </tr>
+                    </sc-if>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style="font-size:12.5px; color:#5a6478; margin-top:12px; line-height:1.55">Outcome is recorded per case after the fact. Cases stay <strong>Under treatment</strong> until the district marks them Recovered or Died — nothing is excluded from the case counts either way.</div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+  </main>
+  </div>
+
+  <footer data-foot="" style="background:#003893; color:#c3cfe6; border-top:4px solid #dc143c; padding:26px 28px; display:flex; flex-wrap:wrap; gap:28px; justify-content:space-between; font-size:13px; line-height:1.7">
+    <div>
+      <div style="color:#ffffff; font-weight:700; font-size:14px">Health Office Sankhuwasabha</div>
+      <div style="font-family:'Noto Sans Devanagari',sans-serif">स्वास्थ्य कार्यालय, संखुवासभा · खाँदबारी</div>
+      <div>Koshi Province, Nepal</div>
+    </div>
+    <div>
+      <div style="color:#ffffff; font-weight:700; font-size:14px">Vector-borne disease survellience</div>
+      
+      <div>Email: dhosankhuwasabha@gmail.com</div>
+    </div>
+    <div style="max-width:320px">
+      <div style="color:#ffffff; font-weight:700; font-size:14px">Data use</div>
+      <div>Aggregate figures are public. Patient names are restricted to the district line list and never published.</div>
+    </div>
+    <div style="align-self:flex-end; color:#9fb2d6">© 2083 Government of Nepal</div>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;rowsPerPage&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:50,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:10,&quot;max&quot;:200,&quot;step&quot;:10,&quot;section&quot;:&quot;Line list&quot;},&quot;districtCode&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;SNK-2082&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Line list&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const mock = Component.buildMock();
+    this.state = {
+      view: 'dashboard',
+      reportingOpen: true,
+      palika: 'Khandbari Municipality',
+      reportDate: mock.today,
+      pulses: mock.pulses,
+      cases: mock.cases,
+      draft: {},
+      caseDisease: 'dengue',
+      caseForm: Component.emptyCase(mock.today),
+      editingId: null,
+      confirmDelete: null,
+      caseTouched: false,
+      pulseNote: '',
+      pulseOk: true,
+      caseNote: '',
+      caseOk: true,
+      copied: false,
+      unlocked: false,
+      codeValue: '',
+      codeNote: '',
+      codeOk: true,
+      dashRange: '30',
+      scope: 'all',
+      filter: 'all',
+      llFrom: '',
+      llTo: '',
+      llQuery: '',
+      page: 0,
+      outcomeFilter: 'all'
+    };
+    this.today = mock.today;
+    this.days = mock.days;
+  }
+
+  static get PALIKAS() {
+    return ['Chainpur Municipality', 'Dharmadevi Municipality', 'Khandbari Municipality', 'Madi Municipality', 'Panchkhapan Municipality', 'Bhotkhola Rural Municipality', 'Chichila Rural Municipality', 'Makalu Rural Municipality', 'Sabhapokhari Rural Municipality', 'Silichong Rural Municipality'];
+  }
+  static get DISEASES() {
+    return {
+      dengue: {
+        key: 'dengue', label: 'Dengue', labelLower: 'dengue', labelNe: 'डेंगु',
+        accent: '#c8102e', accentSoft: '#f2b6c1', tint: '#fdf2f4',
+        fields: [['ns1', 'NS1'], ['igm', 'IgM'], ['igg', 'IgG'], ['pcr', 'PCR']],
+        testTypes: ['NS1', 'IgM', 'IgG', 'PCR']
+      },
+      scrub: {
+        key: 'scrub', label: 'Scrub typhus', labelLower: 'scrub typhus', labelNe: 'स्क्रब टाइफस',
+        accent: '#003893', accentSoft: '#b8c5e2', tint: '#f1f4fb',
+        fields: [['rdt', 'IgM RDT'], ['elisa', 'IgM ELISA'], ['pcr', 'PCR']],
+        testTypes: ['IgM RDT', 'IgM ELISA', 'PCR']
+      }
+    };
+  }
+  static emptyCase(date) {
+    return { patient_name: '', age: '', age_unit: 'years', sex: '', ward: '', tole: '', test_type: '', test_date: date };
+  }
+  static iso(d) { return d.toISOString().slice(0, 10); }
+  static short(name) { return name.replace(' Rural Municipality', ' RM').replace(' Municipality', ' M'); }
+
+  static get OUTCOMES() {
+    return {
+      treatment: { label: 'Under treatment', labelNe: 'उपचाररत', bg: '#fdf7ea', border: '#f0e0bd', color: '#8a5b0f' },
+      recovered: { label: 'Recovered', labelNe: 'निको भएको', bg: '#eef5f0', border: '#cfe3d7', color: '#1c5e42' },
+      died: { label: 'Died', labelNe: 'मृत्यु', bg: '#fdf0f1', border: '#f6d5d8', color: '#b3261e' }
+    };
+  }
+  setOutcome(id, v) {
+    this.setState(s => ({ cases: s.cases.map(c => (c.case_id === id ? Object.assign({}, c, { outcome: v }) : c)) }));
+  }
+
+  static get BS_MONTHS() { return ['बैशाख', 'जेठ', 'असार', 'साउन', 'भदौ', 'असोज', 'कार्तिक', 'मंसिर', 'पुष', 'माघ', 'फागुन', 'चैत']; }
+  static get BS_STARTS() {
+    return [
+      ['2025-12-16', 2082, 9], ['2026-01-15', 2082, 10], ['2026-02-13', 2082, 11], ['2026-03-15', 2082, 12],
+      ['2026-04-14', 2083, 1], ['2026-05-15', 2083, 2], ['2026-06-15', 2083, 3], ['2026-07-17', 2083, 4],
+      ['2026-08-17', 2083, 5], ['2026-09-17', 2083, 6], ['2026-10-18', 2083, 7]
+    ];
+  }
+  static ne(n) { return String(n).replace(/[0-9]/g, c => '०१२३४५६७८९'[+c]); }
+  bs(iso) {
+    if (!iso) return '';
+    const starts = Component.BS_STARTS;
+    let hit = null;
+    for (let i = 0; i < starts.length; i++) { if (iso >= starts[i][0]) hit = starts[i]; }
+    if (!hit) return iso;
+    const day = Math.round((new Date(iso + 'T00:00:00Z') - new Date(hit[0] + 'T00:00:00Z')) / 86400000) + 1;
+    return Component.ne(day) + ' ' + Component.BS_MONTHS[hit[2] - 1] + ' ' + Component.ne(hit[1]);
+  }
+  bsLong(iso) {
+    const wd = ['आइतबार', 'सोमबार', 'मंगलबार', 'बुधबार', 'बिहीबार', 'शुक्रबार', 'शनिबार'][new Date(iso + 'T00:00:00Z').getUTCDay()];
+    return wd + ', ' + this.bs(iso);
+  }
+
+  static buildMock() {
+    let s = 20260731;
+    const rng = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; };
+    const base = new Date('2026-07-31T00:00:00Z');
+    const days = [];
+    for (let i = 29; i >= 0; i--) days.push(Component.iso(new Date(base.getTime() - i * 86400000)));
+    const today = days[29];
+    const first = ['Aashish', 'Bimala', 'Chandra', 'Dipesh', 'Gita', 'Hari', 'Indira', 'Kamal', 'Laxmi', 'Manoj', 'Nirmala', 'Pemba', 'Rajan', 'Sabina', 'Tashi', 'Urmila', 'Bishal', 'Sunita', 'Karma', 'Prakash'];
+    const last = ['Rai', 'Limbu', 'Sherpa', 'Tamang', 'Gurung', 'Shrestha', 'Bhattarai', 'Magar', 'Adhikari', 'Bhote'];
+    const toles = ['Tumlingtar', 'Bazaar Line', 'Num', 'Sisuwa', 'Mane Bhanjyang', 'Dhupu', 'Hile', 'Bhotebas', 'Chyamtang', 'Mangtewa'];
+    const pulses = [], cases = [];
+    const skipToday = [2, 5, 8];
+    let cid = 1;
+    Component.PALIKAS.forEach((palika, pi) => {
+      const scale = 0.45 + ((pi * 37) % 100) / 100 * 1.5;
+      days.forEach((date, di) => {
+        if (di === 29 && skipToday.indexOf(pi) >= 0) return;
+        const wave = 0.45 + 0.85 * Math.sin((di / 29) * Math.PI * 0.9);
+        const dTests = Math.round(rng() * 5 * scale * wave + (rng() < 0.25 ? 0 : 1));
+        const sTests = Math.round(rng() * 3 * scale * wave);
+        const dSplit = [0, 0, 0, 0];
+        for (let i = 0; i < dTests; i++) dSplit[rng() < 0.6 ? 0 : (rng() < 0.6 ? 1 : (rng() < 0.7 ? 2 : 3))]++;
+        const sSplit = [0, 0, 0];
+        for (let i = 0; i < sTests; i++) sSplit[rng() < 0.65 ? 0 : (rng() < 0.7 ? 1 : 2)]++;
+        const pulseRow = {
+          pulse_id: 'P' + (pi + 1) + '-' + date, report_date: date, unit_id: 'U' + (pi + 1), palika: palika,
+          dengue_suspects: dTests + Math.round(rng() * 4), dengue_ns1: dSplit[0], dengue_igm: dSplit[1], dengue_igg: dSplit[2], dengue_pcr: dSplit[3],
+          scrub_suspects: sTests + Math.round(rng() * 3), scrub_rdt: sSplit[0], scrub_elisa: sSplit[1], scrub_pcr: sSplit[2],
+          nil_report: dTests === 0 && sTests === 0, reporter: 'Focal person', remarks: '', submitted_at: date + ' 16:40'
+        };
+        pulses.push(pulseRow);
+        const mk = (disease, n, types) => {
+          for (let i = 0; i < n; i++) {
+            const months = rng() < 0.06;
+            cases.push({
+              case_id: 'C-' + String(cid++).padStart(4, '0'), submitted_at: date, disease: disease,
+              unit_id: 'U' + (pi + 1), palika: palika, ward: 1 + Math.floor(rng() * 9),
+              tole: toles[Math.floor(rng() * toles.length)],
+              patient_name: first[Math.floor(rng() * first.length)] + ' ' + last[Math.floor(rng() * last.length)],
+              age: months ? 1 + Math.floor(rng() * 11) : 2 + Math.floor(rng() * 68),
+              age_unit: months ? 'months' : 'years',
+              sex: rng() < 0.48 ? 'Male' : 'Female',
+              test_type: types[Math.floor(rng() * types.length)], test_date: date, reporter: 'Focal person',
+              outcome: di < 20 ? (rng() < 0.03 ? 'died' : 'recovered') : (rng() < 0.45 ? 'recovered' : 'treatment')
+            });
+          }
+          return n;
+        };
+        pulseRow.dengue_positives = mk('dengue', Math.min(dTests, Math.round(dTests * 0.32 * (0.4 + rng()))), ['NS1', 'IgM', 'IgG', 'PCR']);
+        pulseRow.scrub_positives = mk('scrub', Math.min(sTests, Math.round(sTests * 0.3 * (0.3 + rng()))), ['IgM RDT', 'IgM ELISA', 'PCR']);
+      });
+    });
+    return { pulses: pulses, cases: cases, days: days, today: today };
+  }
+
+  fmtDate(iso) {
+    return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+  num(v) { const n = parseInt(v, 10); return isNaN(n) || n < 0 ? 0 : n; }
+  savedPulse() { return this.state.pulses.find(p => p.palika === this.state.palika && p.report_date === this.state.reportDate); }
+  draftKey() { return this.state.palika + '|' + this.state.reportDate; }
+  draftFor() {
+    const saved = this.savedPulse() || {};
+    const d = this.state.draft[this.draftKey()] || {};
+    const g = (k) => (d[k] !== undefined ? d[k] : (saved[k] !== undefined && saved[k] !== null ? String(saved[k]) : ''));
+    return { g: g, saved: saved };
+  }
+  setDraft(k, v) {
+    const key = this.draftKey();
+    this.setState(s => ({ draft: Object.assign({}, s.draft, { [key]: Object.assign({}, s.draft[key], { [k]: v }) }), pulseNote: '' }));
+  }
+
+  diseaseIssues() {
+    const { g } = this.draftFor();
+    const out = {};
+    Object.keys(Component.DISEASES).forEach(k => {
+      const dd = Component.DISEASES[k];
+      const tests = dd.fields.reduce((a, f) => a + this.num(g(k + '_' + f[0])), 0);
+      const suspects = this.num(g(k + '_suspects'));
+      const pos = this.state.cases.filter(c => c.palika === this.state.palika && c.test_date === this.state.reportDate && c.disease === k).length;
+      const declaredRaw = g(k + '_positives');
+      const declared = this.num(declaredRaw);
+      let level = null, message = '';
+      if (declared > tests) {
+        level = 'error';
+        message = 'Positives (' + declared + ') cannot exceed tests done (' + tests + ').';
+      } else if (pos > declared) {
+        level = 'error';
+        message = pos + ' ' + dd.labelLower + ' case' + (pos === 1 ? '' : 's') + ' already on the line list for this date, but only ' + declared + ' positive' + (declared === 1 ? '' : 's') + ' declared. Raise the number or delete the extra case' + (pos - declared === 1 ? '' : 's') + '.';
+      } else if (pos < declared) {
+        level = 'warn';
+        message = 'Declared ' + declared + ' positive' + (declared === 1 ? '' : 's') + ' but ' + pos + ' case' + (pos === 1 ? '' : 's') + ' entered — add ' + (declared - pos) + ' more on the Positive cases screen.';
+      } else if (tests > 0 && suspects < tests) {
+        level = 'warn';
+        message = 'Suspects (' + suspects + ') is fewer than tests done (' + tests + '). You can still save, but check the figures.';
+      }
+      out[k] = { tests: tests, suspects: suspects, declared: declared, entered: pos, remaining: declared - pos, level: level, message: message };
+    });
+    return out;
+  }
+
+  submitPulse() {
+    const issues = this.diseaseIssues();
+    if (Object.keys(issues).some(k => issues[k].level === 'error')) return;
+    const { g, saved } = this.draftFor();
+    const nil = !!g('nil_report');
+    const row = Object.assign({}, saved, {
+      pulse_id: saved.pulse_id || 'P-' + Component.short(this.state.palika) + '-' + this.state.reportDate,
+      report_date: this.state.reportDate, palika: this.state.palika, unit_id: saved.unit_id || 'U?',
+      dengue_positives: this.num(g('dengue_positives')), scrub_positives: this.num(g('scrub_positives')),
+      dengue_suspects: this.num(g('dengue_suspects')), dengue_ns1: this.num(g('dengue_ns1')), dengue_igm: this.num(g('dengue_igm')), dengue_igg: this.num(g('dengue_igg')), dengue_pcr: this.num(g('dengue_pcr')),
+      scrub_suspects: this.num(g('scrub_suspects')), scrub_rdt: this.num(g('scrub_rdt')), scrub_elisa: this.num(g('scrub_elisa')), scrub_pcr: this.num(g('scrub_pcr')),
+      remarks: g('remarks'), nil_report: nil, reporter: 'Focal person',
+      submitted_at: this.state.reportDate + ' ' + new Date().toTimeString().slice(0, 5)
+    });
+    const existed = !!saved.pulse_id;
+    this.setState(s => ({
+      pulses: s.pulses.filter(x => !(x.palika === row.palika && x.report_date === row.report_date)).concat([row]),
+      pulseNote: (existed ? 'Updated ' : 'Saved ') + this.fmtDate(this.state.reportDate) + ' — dengue ' + issues.dengue.tests + ' tests, scrub typhus ' + issues.scrub.tests + ' tests. Resubmitting this date overwrites the row.',
+      pulseOk: true
+    }));
+  }
+
+  caseErrors() {
+    const f = this.state.caseForm;
+    return {
+      name: !f.patient_name.trim() ? 'Patient name is required.' : '',
+      age: !String(f.age).trim() ? 'Age is required.' : '',
+      sex: !f.sex ? 'Select sex.' : '',
+      ward: !String(f.ward).trim() ? 'Ward number is required.' : '',
+      test: !f.test_type ? 'Select the test type.' : ''
+    };
+  }
+  submitCase() {
+    const errs = this.caseErrors();
+    if (Object.keys(errs).some(k => errs[k])) {
+      this.setState({ caseTouched: true, caseNote: 'Fill the highlighted fields before saving.', caseOk: false });
+      return;
+    }
+    const f = this.state.caseForm;
+    const st = this.state;
+    if (!st.editingId) {
+      const q = this.diseaseIssues()[st.caseDisease];
+      const dl = Component.DISEASES[st.caseDisease].labelLower;
+      if (q.entered >= q.declared) {
+        this.setState({
+          caseNote: q.declared
+            ? 'Daily numbers declares ' + q.declared + ' ' + dl + ' positive' + (q.declared === 1 ? '' : 's') + ' for this date and ' + q.entered + ' are already entered. Raise the count on Daily numbers before adding another.'
+            : 'No ' + dl + ' positives declared for this date. Enter the count on Daily numbers first.',
+          caseOk: false
+        });
+        return;
+      }
+    }
+    const row = {
+      case_id: st.editingId || ('C-' + String(9000 + st.cases.length).slice(-4)),
+      submitted_at: this.today, disease: st.caseDisease, unit_id: 'U?', palika: st.palika,
+      ward: this.num(f.ward), tole: f.tole.trim(), patient_name: f.patient_name.trim(),
+      age: this.num(f.age), age_unit: f.age_unit, sex: f.sex, test_type: f.test_type,
+      test_date: f.test_date || this.today, reporter: 'Focal person'
+    };
+    this.setState(s => ({
+      cases: s.editingId ? s.cases.map(c => (c.case_id === s.editingId ? row : c)) : s.cases.concat([row]),
+      caseForm: Component.emptyCase(s.reportDate),
+      editingId: null, caseTouched: false,
+      caseNote: (st.editingId ? 'Saved changes to ' + st.editingId + ' · ' : '') + row.patient_name + (st.editingId ? '' : ' added to the line list') + '.',
+      caseOk: true
+    }));
+  }
+  editCase(c) {
+    this.setState({
+      editingId: c.case_id, caseDisease: c.disease, caseTouched: false, confirmDelete: null,
+      caseForm: { patient_name: c.patient_name, age: String(c.age), age_unit: c.age_unit, sex: c.sex, ward: String(c.ward), tole: c.tole, test_type: c.test_type, test_date: c.test_date },
+      caseNote: 'Editing ' + c.case_id + '. Change the fields and save.', caseOk: true
+    });
+  }
+  deleteCase(c) {
+    if (this.state.confirmDelete !== c.case_id) {
+      this.setState({ confirmDelete: c.case_id });
+      return;
+    }
+    this.setState(s => ({
+      cases: s.cases.filter(x => x.case_id !== c.case_id),
+      confirmDelete: null,
+      editingId: s.editingId === c.case_id ? null : s.editingId,
+      caseForm: s.editingId === c.case_id ? Component.emptyCase(s.reportDate) : s.caseForm,
+      caseNote: c.case_id + ' (' + c.patient_name + ') removed from the line list.', caseOk: true
+    }));
+  }
+
+  csv(name, header, rows) {
+    const esc = (v) => {
+      const s = v === null || v === undefined ? '' : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const body = [header].concat(rows).map(r => r.map(esc).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\ufeff' + body], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  rangeDays() {
+    const r = this.state.dashRange;
+    if (r === 'all') return this.days.slice();
+    const n = r === 'today' ? 1 : parseInt(r, 10);
+    return this.days.slice(Math.max(0, this.days.length - n));
+  }
+  rangeLabel() {
+    const r = this.state.dashRange;
+    return r === 'today' ? 'today' : r === 'all' ? 'all 30 days on record' : 'last ' + r + ' days';
+  }
+
+  board(dk) {
+    const d = Component.DISEASES[dk];
+    const st = this.state;
+    const inRange = this.rangeDays();
+    const rangeSet = {};
+    inRange.forEach(x => { rangeSet[x] = 1; });
+    const names = st.scope === 'all' ? Component.PALIKAS : [st.scope];
+    const testKeys = d.fields.map(f => d.key + '_' + f[0]);
+    const testsOf = (p) => testKeys.reduce((a, k) => a + (p[k] || 0), 0);
+    const rows = names.map(name => {
+      const mine = st.pulses.filter(p => p.palika === name);
+      const cs = st.cases.filter(c => c.palika === name && c.disease === d.key);
+      const todayRow = mine.find(p => p.report_date === this.today);
+      const posRange = cs.filter(c => rangeSet[c.test_date]).length;
+      return {
+        palika: Component.short(name),
+        reported: !!todayRow,
+        statusDot: todayRow ? '#1f6d4a' : '#d98b8b',
+        statusTitle: todayRow ? 'Reported today' : 'Has not reported today',
+        testsRange: mine.filter(p => rangeSet[p.report_date]).reduce((a, p) => a + testsOf(p), 0),
+        testsCum: mine.reduce((a, p) => a + testsOf(p), 0),
+        posRange: posRange,
+        posColor: posRange > 0 ? d.accent : '#8e97a9',
+        posCum: cs.length
+      };
+    });
+    const total = ['testsRange', 'testsCum', 'posRange', 'posCum'].reduce((o, k) => {
+      o[k] = rows.reduce((a, r) => a + r[k], 0); return o;
+    }, {});
+    const curveDays = this.days.slice(Math.max(0, this.days.length - Math.max(14, inRange.length)));
+    const perDay = curveDays.map(day => st.cases.filter(c => c.disease === d.key && c.test_date === day && (st.scope === 'all' || c.palika === st.scope)).length);
+    const max = Math.max(3, ...perDay);
+    const bars = perDay.map((n, i) => ({ h: (n / max * 100).toFixed(1) + '%', fill: d.accentSoft, tip: this.bs(curveDays[i]) + ' · ' + n + ' positive' }));
+    const avg = perDay.map((_, i) => {
+      const w = perDay.slice(Math.max(0, i - 6), i + 1);
+      return w.reduce((a, b) => a + b, 0) / w.length;
+    });
+    const step = 100 / Math.max(1, perDay.length - 1);
+    const shortBs = (iso) => { const p = this.bs(iso).split(' '); return p[0] + ' ' + p[1]; };
+    return {
+      label: d.label, labelNe: d.labelNe, accent: d.accent, accentSoft: d.accentSoft, tint: d.tint,
+      cards: [
+        { label: 'Positive · ' + this.rangeLabel(), labelNe: 'पोजिटिभ', value: total.posRange, color: d.accent },
+        { label: 'Cumulative cases', labelNe: 'कुल बिरामी', value: total.posCum, color: '#1b1f2a' },
+        { label: 'Tests · ' + this.rangeLabel(), labelNe: 'परीक्षण', value: total.testsRange, color: '#1b1f2a' },
+        { label: 'Cumulative tests', labelNe: 'कुल परीक्षण', value: total.testsCum, color: '#1b1f2a' }
+      ],
+      rows: rows, total: total, bars: bars,
+      avgPts: avg.map((v, i) => (i * step).toFixed(2) + ',' + (100 - v / max * 100).toFixed(2)).join(' '),
+      yMax: max, yMid: Math.round(max / 2),
+      ticks: [shortBs(curveDays[0]), shortBs(curveDays[Math.floor(curveDays.length / 3)]), shortBs(curveDays[Math.floor(curveDays.length * 2 / 3)]), shortBs(curveDays[curveDays.length - 1])],
+      curveLabel: 'last ' + curveDays.length + ' days · by test date',
+      onExport: () => this.csv('palika-table-' + d.key + '.csv',
+        ['Palika', 'Tests (' + this.rangeLabel() + ')', 'Tests cumulative', 'Positive (' + this.rangeLabel() + ')', 'Cases cumulative'],
+        rows.map(r => [r.palika, r.testsRange, r.testsCum, r.posRange, r.posCum]).concat([['Total', total.testsRange, total.testsCum, total.posRange, total.posCum]]))
+    };
+  }
+
+  filteredCases() {
+    const st = this.state;
+    const q = st.llQuery.trim().toLowerCase();
+    return st.cases.filter(c =>
+      (st.filter === 'all' || c.disease === st.filter) &&
+      (st.scope === 'all' || c.palika === st.scope) &&
+      (!st.llFrom || c.test_date >= st.llFrom) &&
+      (!st.llTo || c.test_date <= st.llTo) &&
+      (!q || c.patient_name.toLowerCase().indexOf(q) >= 0 || (c.tole || '').toLowerCase().indexOf(q) >= 0)
+    ).sort((a, b) => (a.test_date < b.test_date ? 1 : a.test_date > b.test_date ? -1 : (a.case_id < b.case_id ? 1 : -1)));
+  }
+
+  renderVals() {
+    const st = this.state;
+    const perPage = this.props.rowsPerPage || 50;
+    const code = (this.props.districtCode || 'SNK-2082').toUpperCase();
+
+    const go = (key) => ({
+      bg: st.view === key ? '#e6ecf7' : 'transparent',
+      color: st.view === key ? '#002a6e' : '#333c4d',
+      onClick: () => this.setState({ view: key, pulseNote: '', caseNote: '', confirmDelete: null, reportingOpen: key === 'daily' || key === 'cases' ? true : st.reportingOpen })
+    });
+    const reportingActive = st.view === 'daily' || st.view === 'cases';
+    const reportingItems = [
+      { key: 'daily', label: 'Daily numbers', labelNe: 'दैनिक विवरण', dot: '#003893' },
+      { key: 'cases', label: 'Positive cases', labelNe: 'पोजिटिभ बिरामी', dot: '#c8102e' }
+    ].map(n => Object.assign({}, n, go(n.key)));
+
+    const { g, saved } = this.draftFor();
+    const issues = this.diseaseIssues();
+    const blocked = Object.keys(issues).some(k => issues[k].level === 'error');
+    const diseaseBlocks = ['dengue', 'scrub'].map(k => {
+      const dd = Component.DISEASES[k];
+      const iss = issues[k];
+      return {
+        label: dd.label, labelNe: dd.labelNe, accent: dd.accent,
+        suspects: {
+          value: g(k + '_suspects'),
+          border: iss.level === 'warn' ? '#c98a1a' : '#d3d9e3',
+          onChange: (e) => this.setDraft(k + '_suspects', e.target.value)
+        },
+        fields: dd.fields.map(f => ({
+          label: f[1], value: g(k + '_' + f[0]),
+          onChange: (e) => this.setDraft(k + '_' + f[0], e.target.value)
+        })),
+        total: iss.tests,
+        positives: {
+          value: g(k + '_positives'),
+          border: iss.level === 'error' ? '#b3261e' : iss.level === 'warn' ? '#c98a1a' : '#d3d9e3',
+          onChange: (e) => this.setDraft(k + '_positives', e.target.value)
+        },
+        reconcile: iss.entered + ' of ' + iss.declared + ' entered on the line list',
+        reconcileColor: iss.entered === iss.declared ? '#1c5e42' : iss.entered > iss.declared ? '#b3261e' : '#8a5b0f',
+        hasMessage: !!iss.level,
+        message: iss.message,
+        msgBg: iss.level === 'error' ? '#fdf0f1' : '#fdf7ea',
+        msgBorder: iss.level === 'error' ? '#f6d5d8' : '#f0e0bd',
+        msgColor: iss.level === 'error' ? '#b3261e' : '#8a5b0f'
+      };
+    });
+
+    const dayCasesRaw = st.cases.filter(c => c.palika === st.palika && c.test_date === st.reportDate);
+    const dayCases = dayCasesRaw.map(c => {
+      const dd = Component.DISEASES[c.disease];
+      const confirming = st.confirmDelete === c.case_id;
+      return {
+        id: c.case_id, disease: dd.label, accent: dd.accent, name: c.patient_name,
+        rowBg: st.editingId === c.case_id ? '#f2f5fa' : '#ffffff',
+        meta: c.age + (c.age_unit === 'months' ? ' months' : ' yr') + ' · ' + c.sex + ' · Ward ' + c.ward + (c.tole ? ', ' + c.tole : '') + ' · ' + c.test_type,
+        onEdit: () => this.editCase(c),
+        onDelete: () => this.deleteCase(c),
+        delLabel: confirming ? 'Confirm delete' : 'Delete',
+        delBg: confirming ? '#b3261e' : '#ffffff',
+        delColor: confirming ? '#ffffff' : '#b3261e',
+        delBorder: '#b3261e'
+      };
+    });
+
+    const reportedFull = Component.PALIKAS.filter(p => st.pulses.some(x => x.palika === p && x.report_date === this.today));
+    const notReported = Component.PALIKAS.filter(p => reportedFull.indexOf(p) < 0);
+    const myTodayPulse = st.pulses.find(p => p.palika === st.palika && p.report_date === this.today);
+    const savedThisDate = !!saved.pulse_id;
+
+    const rows = this.filteredCases();
+    const pages = Math.max(1, Math.ceil(rows.length / perPage));
+    const page = Math.min(st.page, pages - 1);
+    const pageRows = rows.slice(page * perPage, page * perPage + perPage).map(c => {
+      const dd = Component.DISEASES[c.disease];
+      return {
+        id: c.case_id, disease: dd.label, accent: dd.accent, tint: dd.tint, name: c.patient_name,
+        age: c.age + (c.age_unit === 'months' ? ' mo' : ' yr'), sex: c.sex,
+        palika: Component.short(c.palika), place: 'Ward ' + c.ward + (c.tole ? ' · ' + c.tole : ''),
+        testType: c.test_type, testDate: c.test_date, testDateBs: this.bs(c.test_date)
+      };
+    });
+
+    const dsh = Component.DISEASES[st.caseDisease];
+    const errs = this.caseErrors();
+    const show = st.caseTouched;
+    const border = (k) => (show && errs[k] ? '#b3261e' : '#d3d9e3');
+
+    return {
+      todayLabel: this.fmtDate(this.today),
+      todayBs: this.bs(this.today),
+      todayBsLong: this.bsLong(this.today),
+      noticeText: notReported.length
+        ? notReported.length + ' of 10 palikas have not submitted today\u2019s numbers: ' + notReported.map(Component.short).join(', ') + '.'
+        : 'All 10 palikas have submitted today\u2019s numbers. Thank you.',
+      navDashboard: go('dashboard'),
+      navLineList: go('linelist'),
+      navOutcome: go('outcome'),
+      isOutcome: st.view === 'outcome',
+      reportingItems: reportingItems,
+      reportingOpen: st.reportingOpen !== false,
+      reportingBg: reportingActive && st.reportingOpen === false ? '#e6ecf7' : 'transparent',
+      reportingColor: reportingActive ? '#002a6e' : '#333c4d',
+      chevronTransform: st.reportingOpen === false ? 'rotate(-90deg)' : 'rotate(0deg)',
+      onToggleReporting: () => this.setState(s => ({ reportingOpen: s.reportingOpen === false })),
+      isDashboard: st.view === 'dashboard',
+      isReport: reportingActive,
+      isDaily: st.view === 'daily',
+      isCases: st.view === 'cases',
+      isLineList: st.view === 'linelist',
+      palikaOptions: Component.PALIKAS,
+      currentPalika: st.palika,
+      onPalika: (e) => this.setState({ palika: e.target.value, pulseNote: '', caseNote: '', editingId: null, confirmDelete: null }),
+      scope: st.scope,
+      scopeLabel: st.scope === 'all' ? 'Sankhuwasabha District' : st.scope,
+      scopeLabelNe: st.scope === 'all' ? 'संखुवासभा जिल्ला · सबै पालिका' : 'एक पालिका मात्र',
+      isDistrictScope: st.scope === 'all',
+      isPalikaScope: st.scope !== 'all',
+      onScope: (e) => {
+        const v = e.target.value;
+        this.setState({ scope: v, page: 0, palika: v === 'all' ? this.state.palika : v, pulseNote: '', caseNote: '', editingId: null, confirmDelete: null });
+      },
+      onClearScope: () => this.setState({ scope: 'all', page: 0 }),
+      today: this.today,
+      onPrint: () => window.print(),
+
+      rangeOptions: [['today', 'Today'], ['7', '7 days'], ['30', '30 days'], ['all', 'All']].map(([k, l]) => ({
+        label: l,
+        bg: st.dashRange === k ? '#003893' : '#ffffff',
+        color: st.dashRange === k ? '#ffffff' : '#333c4d',
+        border: st.dashRange === k ? '#003893' : '#d3d9e3',
+        onClick: () => this.setState({ dashRange: k })
+      })),
+
+      rangeLabel: this.rangeLabel(),
+      rangeShort: st.dashRange === 'today' ? 'today' : st.dashRange === 'all' ? 'all days' : st.dashRange + ' days',
+      dashScopeLabel: st.scope === 'all' ? 'all 10 palikas' : st.scope,
+      boards: [this.board('dengue'), this.board('scrub')],
+      onExportSummary: () => {
+        const bs = [this.board('dengue'), this.board('scrub')];
+        const out = [];
+        bs.forEach((b, i) => b.rows.forEach(r => out.push([b.label, r.palika, r.testsRange, r.testsCum, r.posRange, r.posCum])));
+        this.csv('dashboard-summary.csv', ['Disease', 'Palika', 'Tests (' + this.rangeLabel() + ')', 'Tests cumulative', 'Positive (' + this.rangeLabel() + ')', 'Cases cumulative'], out);
+      },
+      onExportPulses: () => {
+        const set = {};
+        this.rangeDays().forEach(d => { set[d] = 1; });
+        const rowsP = st.pulses
+          .filter(p => set[p.report_date] && (st.scope === 'all' || p.palika === st.scope))
+          .sort((a, b) => (a.report_date < b.report_date ? 1 : -1))
+          .map(p => [p.report_date, this.bs(p.report_date), p.palika, p.dengue_suspects, p.dengue_ns1, p.dengue_igm, p.dengue_igg, p.dengue_pcr,
+            p.dengue_ns1 + p.dengue_igm + p.dengue_igg + p.dengue_pcr, p.scrub_suspects, p.scrub_rdt, p.scrub_elisa, p.scrub_pcr,
+            p.scrub_rdt + p.scrub_elisa + p.scrub_pcr, p.nil_report ? 'yes' : 'no', p.remarks || '', p.reporter]);
+        this.csv('daily-numbers.csv', ['Report date (AD)', 'Report date (BS)', 'Palika', 'Dengue suspects', 'NS1', 'IgM', 'IgG', 'PCR', 'Dengue tests total', 'Scrub suspects', 'IgM RDT', 'IgM ELISA', 'PCR', 'Scrub tests total', 'Nil report', 'Remarks', 'Reporter'], rowsP);
+      },
+      reported: reportedFull.map(Component.short),
+      notReported: notReported.map(Component.short),
+      allReported: notReported.length === 0,
+      completenessLabel: reportedFull.length + ' / 10',
+      completenessPct: (reportedFull.length / 10 * 100).toFixed(0) + '%',
+      copyLabel: st.copied ? 'Copied \u2713' : 'Copy non-reporter list',
+      onCopyNonReporters: () => {
+        const text = notReported.length ? notReported.join('\n') : 'All palikas have reported today.';
+        if (navigator.clipboard) navigator.clipboard.writeText(text);
+        this.setState({ copied: true });
+        clearTimeout(this._t);
+        this._t = setTimeout(() => this.setState({ copied: false }), 2200);
+      },
+
+      pageTitle: st.view === 'cases' ? 'Positive cases' : 'Daily numbers',
+      pageTitleNe: st.view === 'cases' ? 'पोजिटिभ बिरामी' : 'दैनिक विवरण',
+      statusEdge: myTodayPulse ? '#1f6d4a' : '#dc143c',
+      statusItems: [
+        { label: 'Today\u2019s numbers', value: myTodayPulse ? 'Submitted ' + (myTodayPulse.submitted_at || '').slice(-5) : 'Not submitted', color: myTodayPulse ? '#1c5e42' : '#b3261e' },
+        { label: 'Positive cases today', value: st.cases.filter(c => c.palika === st.palika && c.test_date === this.today).length + ' recorded', color: '#22283a' },
+        { label: 'Editing date', value: this.bs(st.reportDate), color: st.reportDate === this.today ? '#22283a' : '#8a5b0f' }
+      ],
+      otherStepLabel: st.view === 'cases' ? 'Go to daily numbers' : 'Go to positive cases',
+      onOtherStep: () => this.setState({ view: st.view === 'cases' ? 'daily' : 'cases', caseNote: '', pulseNote: '' }),
+      reportDate: st.reportDate,
+      reportDateBs: this.bs(st.reportDate) + (st.reportDate === this.today ? ' · today' : ''),
+      onReportDate: (e) => this.setState({ reportDate: e.target.value, pulseNote: '', editingId: null, caseForm: Object.assign({}, st.caseForm, { test_date: e.target.value }) }),
+      diseaseBlocks: diseaseBlocks,
+      nilReport: !!g('nil_report'),
+      onNil: (e) => this.setDraft('nil_report', e.target.checked),
+      remarks: g('remarks'),
+      onRemarks: (e) => this.setDraft('remarks', e.target.value),
+      pulseButtonLabel: savedThisDate ? 'Update this date' : 'Submit daily numbers',
+      pulseBlocked: blocked,
+      pulseBtnBg: blocked ? '#9aa6bd' : '#003893',
+      pulseBtnCursor: blocked ? 'not-allowed' : 'pointer',
+      pulseNote: st.pulseNote || (blocked
+        ? 'Fix the highlighted figures before saving.'
+        : savedThisDate ? 'A row already exists for this palika and date — saving updates it.' : 'No row yet for this palika and date.'),
+      pulseNoteColor: st.pulseNote ? (st.pulseOk ? '#1c5e42' : '#b3261e') : (blocked ? '#b3261e' : '#5a6478'),
+      onSubmitPulse: () => this.submitPulse(),
+
+      diseaseToggle: ['dengue', 'scrub'].map(k => {
+        const dd = Component.DISEASES[k];
+        const on = st.caseDisease === k;
+        return {
+          label: dd.label,
+          bg: on ? dd.accent : '#ffffff',
+          color: on ? '#ffffff' : '#333c4d',
+          border: on ? dd.accent : '#d3d9e3',
+          onClick: () => this.setState({ caseDisease: k, caseForm: Object.assign({}, st.caseForm, { test_type: '' }) })
+        };
+      }),
+      quotaText: (() => {
+        const q = issues[st.caseDisease];
+        if (!savedThisDate && !q.declared) return 'No ' + dsh.labelLower + ' positives declared for this date yet. Enter the count on the Daily numbers screen first, then add that many cases here.';
+        if (st.editingId) return 'Editing an existing case — the declared count of ' + q.declared + ' is unchanged.';
+        if (q.entered === q.declared) return 'All ' + q.declared + ' declared ' + dsh.labelLower + ' positive' + (q.declared === 1 ? '' : 's') + ' for this date are entered. Raise the count on Daily numbers to add more.';
+        if (q.entered > q.declared) return q.entered + ' cases entered but only ' + q.declared + ' declared on Daily numbers — delete the extras or raise the declared count.';
+        return q.remaining + ' of ' + q.declared + ' declared ' + dsh.labelLower + ' positive' + (q.declared === 1 ? '' : 's') + ' still to enter for this date.';
+      })(),
+      quotaBg: (() => { const q = issues[st.caseDisease]; return q.entered === q.declared && q.declared > 0 ? '#eef5f0' : q.entered > q.declared || !q.declared ? '#fdf0f1' : '#fdf7ea'; })(),
+      quotaBorder: (() => { const q = issues[st.caseDisease]; return q.entered === q.declared && q.declared > 0 ? '#cfe3d7' : q.entered > q.declared || !q.declared ? '#f6d5d8' : '#f0e0bd'; })(),
+      quotaColor: (() => { const q = issues[st.caseDisease]; return q.entered === q.declared && q.declared > 0 ? '#1c5e42' : q.entered > q.declared || !q.declared ? '#b3261e' : '#8a5b0f'; })(),
+      caseHeaderBg: dsh.accent,
+      caseFormTitle: st.editingId ? 'Edit case ' + st.editingId : 'Add a positive case',
+      caseTestTypes: dsh.testTypes,
+      caseName: st.caseForm.patient_name,
+      onCaseName: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { patient_name: e.target.value }) }),
+      caseAge: st.caseForm.age,
+      onCaseAge: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { age: e.target.value }) }),
+      caseAgeUnit: st.caseForm.age_unit,
+      onCaseAgeUnit: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { age_unit: e.target.value }) }),
+      caseSex: st.caseForm.sex,
+      onCaseSex: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { sex: e.target.value }) }),
+      caseWard: st.caseForm.ward,
+      onCaseWard: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { ward: e.target.value }) }),
+      caseTole: st.caseForm.tole,
+      onCaseTole: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { tole: e.target.value }) }),
+      caseTestType: st.caseForm.test_type,
+      onCaseTestType: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { test_type: e.target.value }) }),
+      caseTestDate: st.caseForm.test_date,
+      caseTestDateBs: this.bs(st.caseForm.test_date),
+      onCaseTestDate: (e) => this.setState({ caseForm: Object.assign({}, st.caseForm, { test_date: e.target.value }) }),
+      err: { name: border('name'), age: border('age'), sex: border('sex'), ward: border('ward'), test: border('test') },
+      errMsg: { name: show ? errs.name : '' },
+      caseButtonLabel: st.editingId ? 'Save changes' : 'Add positive case',
+      isEditing: !!st.editingId,
+      onCancelEdit: () => this.setState({ editingId: null, caseTouched: false, caseForm: Component.emptyCase(st.reportDate), caseNote: 'Edit cancelled.', caseOk: true }),
+      onSubmitCase: () => this.submitCase(),
+      caseNote: st.caseNote || 'Every row saved here counts as a positive case — there is no result picker.',
+      caseNoteColor: st.caseNote ? (st.caseOk ? '#1c5e42' : '#b3261e') : '#5a6478',
+      dayCases: dayCases,
+      dayCaseCount: dayCases.length,
+      noDayCases: dayCases.length === 0,
+      onExportDayCases: () => this.csv('cases-' + st.reportDate + '.csv',
+        ['Case ID', 'Disease', 'Patient name', 'Age', 'Age unit', 'Sex', 'Palika', 'Ward', 'Tole', 'Test type', 'Test date (AD)', 'Test date (BS)'],
+        dayCasesRaw.map(c => [c.case_id, Component.DISEASES[c.disease].label, c.patient_name, c.age, c.age_unit, c.sex, c.palika, c.ward, c.tole, c.test_type, c.test_date, this.bs(c.test_date)])),
+
+      locked: !st.unlocked,
+      unlocked: st.unlocked,
+      codeValue: st.codeValue,
+      onCode: (e) => this.setState({ codeValue: e.target.value }),
+      onUnlock: () => {
+        if (st.codeValue.trim().toUpperCase() === code) this.setState({ unlocked: true });
+        else this.setState({ codeNote: 'That code is not recognised. Prototype code: ' + code, codeOk: false });
+      },
+      codeNote: st.codeNote || 'Prototype code: ' + code,
+      codeNoteColor: st.codeOk ? '#5a6478' : '#b3261e',
+      filterOptions: [['all', 'All'], ['dengue', 'Dengue'], ['scrub', 'Scrub typhus']].map(([k, l]) => ({
+        label: l,
+        bg: st.filter === k ? '#003893' : '#ffffff',
+        color: st.filter === k ? '#ffffff' : '#333c4d',
+        border: st.filter === k ? '#003893' : '#d3d9e3',
+        onClick: () => this.setState({ filter: k, page: 0 })
+      })),
+
+      llFrom: st.llFrom,
+      onLlFrom: (e) => this.setState({ llFrom: e.target.value, page: 0 }),
+      llTo: st.llTo,
+      onLlTo: (e) => this.setState({ llTo: e.target.value, page: 0 }),
+      llQuery: st.llQuery,
+      onLlQuery: (e) => this.setState({ llQuery: e.target.value, page: 0 }),
+      onResetFilters: () => this.setState({ filter: 'all', llFrom: '', llTo: '', llQuery: '', page: 0 }),
+      onExportLineList: () => this.csv('line-list.csv',
+        ['Case ID', 'Disease', 'Patient name', 'Age', 'Age unit', 'Sex', 'Palika', 'Ward', 'Tole', 'Test type', 'Test date (AD)', 'Test date (BS)', 'Reporter'],
+        rows.map(c => [c.case_id, Component.DISEASES[c.disease].label, c.patient_name, c.age, c.age_unit, c.sex, c.palika, c.ward, c.tole, c.test_type, c.test_date, this.bs(c.test_date), c.reporter])),
+      lineRows: pageRows,
+      noLineRows: rows.length === 0,
+      lineCountLabel: rows.length + ' case' + (rows.length === 1 ? '' : 's') + ' match these filters · showing ' + pageRows.length + ' · newest first',
+      pageLabel: 'Page ' + (page + 1) + ' of ' + pages,
+      onPrevPage: () => this.setState({ page: Math.max(0, page - 1) }),
+      onNextPage: () => this.setState({ page: Math.min(pages - 1, page + 1) }),
+      prevColor: page === 0 ? '#b6bccb' : '#003893',
+      nextColor: page >= pages - 1 ? '#b6bccb' : '#003893',
+      lineHeaders: ['Case ID', 'Disease', 'Patient name', 'Age', 'Sex', 'Palika', 'Ward / tole', 'Test type', 'Test date'],
+
+      outcomeFilters: [['all', 'All'], ['treatment', 'Under treatment'], ['recovered', 'Recovered'], ['died', 'Died']].map(([k, l]) => ({
+        label: l,
+        bg: st.outcomeFilter === k ? '#003893' : '#ffffff',
+        color: st.outcomeFilter === k ? '#ffffff' : '#333c4d',
+        border: st.outcomeFilter === k ? '#003893' : '#d3d9e3',
+        onClick: () => this.setState({ outcomeFilter: k })
+      })),
+      outcomeCards: (() => {
+        const scoped = rows;
+        const n = (k) => scoped.filter(c => (c.outcome || 'treatment') === k).length;
+        const died = n('died');
+        return [
+          { label: 'Cases in scope', labelNe: 'कुल बिरामी', value: scoped.length, color: '#1b1f2a' },
+          { label: 'Recovered', labelNe: 'निको भएको', value: n('recovered'), color: '#1c5e42' },
+          { label: 'Under treatment', labelNe: 'उपचाररत', value: n('treatment'), color: '#8a5b0f' },
+          { label: 'Died', labelNe: 'मृत्यु', value: died, color: '#b3261e' },
+          { label: 'Case fatality rate', labelNe: 'मृत्यु दर', value: scoped.length ? (died / scoped.length * 100).toFixed(1) + '%' : '—', color: '#b3261e' }
+        ];
+      })(),
+      outcomeRows: (() => {
+        const list = rows.filter(c => st.outcomeFilter === 'all' || (c.outcome || 'treatment') === st.outcomeFilter);
+        this._outcomeExport = list;
+        return list.slice(0, 200).map(c => {
+          const dd = Component.DISEASES[c.disease];
+          const cur = c.outcome || 'treatment';
+          const oc = Component.OUTCOMES[cur];
+          return {
+            id: c.case_id, disease: dd.label, accent: dd.accent, tint: dd.tint, name: c.patient_name,
+            who: c.age + (c.age_unit === 'months' ? ' mo' : ' yr') + ' · ' + c.sex + ' · ' + Component.short(c.palika) + ' w' + c.ward,
+            testDate: c.test_date, testDateBs: this.bs(c.test_date),
+            statusLabel: oc.label, pillBg: oc.bg, pillBorder: oc.border, pillColor: oc.color,
+            actions: ['treatment', 'recovered', 'died'].map(k => {
+              const o = Component.OUTCOMES[k];
+              const on = cur === k;
+              return {
+                label: k === 'treatment' ? 'Treating' : o.label,
+                title: 'Mark as ' + o.label,
+                bg: on ? o.color : '#ffffff',
+                color: on ? '#ffffff' : o.color,
+                border: on ? o.color : '#d3d9e3',
+                onClick: () => this.setOutcome(c.case_id, k)
+              };
+            })
+          };
+        });
+      })(),
+      noOutcomeRows: rows.filter(c => st.outcomeFilter === 'all' || (c.outcome || 'treatment') === st.outcomeFilter).length === 0,
+      outcomeCountLabel: (() => {
+        const n = rows.filter(c => st.outcomeFilter === 'all' || (c.outcome || 'treatment') === st.outcomeFilter).length;
+        return n + ' case' + (n === 1 ? '' : 's') + ' match these filters' + (n > 200 ? ' · showing first 200' : '') + ' · newest first';
+      })(),
+      outcomeHeaders: ['Case ID', 'Disease', 'Patient name', 'Age / sex / place', 'Test date', 'Outcome', 'Set outcome'],
+      onExportOutcome: () => this.csv('outcome.csv',
+        ['Case ID', 'Disease', 'Patient name', 'Age', 'Age unit', 'Sex', 'Palika', 'Ward', 'Tole', 'Test type', 'Test date (AD)', 'Test date (BS)', 'Outcome'],
+        (this._outcomeExport || []).map(c => [c.case_id, Component.DISEASES[c.disease].label, c.patient_name, c.age, c.age_unit, c.sex, c.palika, c.ward, c.tole, c.test_type, c.test_date, this.bs(c.test_date), Component.OUTCOMES[c.outcome || 'treatment'].label]))
+    };
+  }
+}
+
+</script>
+</body>
+</html>

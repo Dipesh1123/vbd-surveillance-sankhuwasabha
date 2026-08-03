@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>VBD Surveillance · Sankhuwasabha</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <!-- Everything is rendered by App.html into #root. -->
+  <div id="root">
+    <div class="busy"><div class="spin"></div></div>
+  </div>
+  <div id="toast-host"></div>
+  <div id="modal-host"></div>
+
+  <script>
+    // Stamped at serve time so support staff can confirm which build a palika is on.
+    // NOTE: the printing scriptlet below must be the force-print form, because
+    // the plain form HTML-escapes its output and would mangle the JSON quotes.
+    window.BUILD_STAMP = <?!= JSON.stringify(buildStamp) ?>;
+  </script>
+  <?!= include('App'); ?>
+</body>
+</html>

@@ -1,0 +1,1594 @@
+<script>
+/* ==========================================================================
+   VBD Surveillance — client application
+   Plain ES5-safe JavaScript, no build step and no CDN framework, because the
+   people using this are often on a 3G phone at a rural health post. The whole
+   payload is HTML + CSS + this file.
+
+   Two credentials, deliberately separate:
+     unit token     — a palika focal person. Enters their own daily return and
+                      their own positive cases.
+     district token — surveillance staff. Unlocks patient names (the line list
+                      and outcome screens) across every palika.
+   Both can be held at once: a district officer sitting in a palika office can
+   enter that palika's return and still read the line list.
+   ========================================================================== */
+
+(function () {
+'use strict';
+
+/* ----------------------------------------------------------------- util -- */
+
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function qs(sel) { return document.querySelector(sel); }
+function qsa(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+function num(v) { var n = parseInt(v, 10); return (isNaN(n) || n < 0) ? 0 : n; }
+
+var NE_DIGITS = '०१२३४५६७८९';
+function neDigits(n) {
+  return String(n).replace(/[0-9]/g, function (c) { return NE_DIGITS[Number(c)]; });
+}
+var BS_MONTHS = ['बैशाख','जेठ','असार','साउन','भदौ','असोज','कार्तिक','मंसिर','पुष','माघ','फागुन','चैत'];
+var BS_WEEK   = ['आइतबार','सोमबार','मंगलबार','बुधबार','बिहीबार','शुक्रबार','शनिबार'];
+
+function daysBetween(a, b) {
+  return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+}
+function addDays(iso, n) {
+  var d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+/** AD -> BS using the table the server loaded from the BS_Calendar sheet. */
+function bs(iso) {
+  var t = S.boot && S.boot.bsTable;
+  if (!iso || !t || !t.length) return iso || '';
+  var hit = null;
+  for (var i = 0; i < t.length; i++) { if (iso >= t[i].ad_start) hit = t[i]; else break; }
+  if (!hit) return iso;
+  if (hit === t[t.length - 1] && daysBetween(hit.ad_start, iso) > 32) return iso;
+  var day = daysBetween(hit.ad_start, iso) + 1;
+  return neDigits(day) + ' ' + BS_MONTHS[hit.bs_month - 1] + ' ' + neDigits(hit.bs_year);
+}
+function bsLong(iso) {
+  if (!iso) return '';
+  return BS_WEEK[new Date(iso + 'T00:00:00Z').getUTCDay()] + ', ' + bs(iso);
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB',
+    { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/* ------------------------------------------------------------------ rpc -- */
+
+/*
+ * Two transports, one contract.
+ *
+ *   gas   — the page was served by HtmlService (the script.google.com /exec
+ *           URL). google.script.run is present and there is no origin to cross.
+ *   http  — the page is a static file on ordinary hosting. Calls go by fetch()
+ *           to VBD_CONFIG.apiUrl, normally the same-origin /api/rpc proxy.
+ *           Same-origin is the whole point: an Apps Script web app cannot
+ *           answer a CORS preflight, so a proxy on the hosting side is what
+ *           makes a remotely-hosted frontend possible at all.
+ *
+ * Either way rpc() resolves with the handler's `data` and rejects with an Error
+ * whose message is safe to show a user.
+ */
+var CFG = (typeof window !== 'undefined' && window.VBD_CONFIG) || {};
+var HAS_GAS = (typeof google !== 'undefined' && google.script && google.script.run);
+var TRANSPORT = HAS_GAS ? 'gas' : (CFG.apiUrl ? 'http' : 'none');
+var busyDepth = 0;
+
+function setBusy(on) {
+  busyDepth += on ? 1 : -1;
+  if (busyDepth < 0) busyDepth = 0;
+  var host = qs('#busy-host');
+  if (!host) return;
+  host.innerHTML = busyDepth > 0 ? '<div class="busy"><div class="spin"></div></div>' : '';
+}
+
+/** Raw call over google.script.run. Resolves with the handler's envelope. */
+function gasCall(fn, args) {
+  return new Promise(function (resolve, reject) {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)[fn].apply(google.script.run, args);
+  });
+}
+
+/** Raw call over HTTP. Resolves with the handler's envelope. */
+function httpCall(fn, args) {
+  return fetch(CFG.apiUrl, {
+    method: 'POST',
+    /* text/plain keeps this a CORS "simple request". application/json would
+       trigger a preflight, and an Apps Script web app cannot answer OPTIONS —
+       which matters when apiUrl points straight at /exec with no proxy. */
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn: fn, args: args }),
+    credentials: 'omit'
+  }).catch(function () {
+    /* fetch() rejects with an opaque "Failed to fetch" for every network-level
+       problem there is: no signal, DNS, a captive portal at the guest house,
+       the phone dropping to no data mid-save. None of that is the reporter's
+       fault and none of it is fixed by anything on this screen, so say the one
+       thing that is both true and actionable. */
+    throw new Error('No connection to the server. Check your internet and try again.');
+  }).then(function (res) {
+    return res.text().then(function (body) {
+      try {
+        return JSON.parse(body);
+      } catch (e) {
+        throw new Error(res.ok
+          ? 'The server sent a reply this page could not read.'
+          : 'Could not reach the server (error ' + res.status + '). Check your connection.');
+      }
+    });
+  });
+}
+
+/**
+ * Call a server function and get a promise for its `data`.
+ * Server handlers return {ok, data} | {ok:false, error}; a rejected promise here
+ * always carries a message that is safe to show a user.
+ */
+function rpc(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  if (TRANSPORT === 'none') {
+    return Promise.reject(new Error(
+      'This page is not connected to a server. Open it from the surveillance web address ' +
+      'rather than from a file on this device.'));
+  }
+  setBusy(true);
+  var call = TRANSPORT === 'gas' ? gasCall(fn, args) : httpCall(fn, args);
+  return call.then(function (res) {
+    setBusy(false);
+    if (!res) throw new Error('The server returned nothing. Try again.');
+    if (res.ok) return res.data;
+    if (res.code === 'SESSION_EXPIRED') signOut(true);
+    throw new Error(res.error || 'Something went wrong.');
+  }, function (err) {
+    setBusy(false);
+    throw new Error((err && err.message) ? err.message : 'Could not reach the server.');
+  });
+}
+
+function toast(message, kind) {
+  var host = qs('#toast-host');
+  if (!host) return;
+  host.innerHTML = '<div class="toast ' + (kind === 'err' ? 'err' : 'ok') + '">' + esc(message) + '</div>';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function () { host.innerHTML = ''; }, kind === 'err' ? 7000 : 4500);
+}
+
+/* ---------------------------------------------------------------- state -- */
+
+var S = {
+  boot: null,
+  needsSetup: null,  // { missing: [...] } — set when the workbook has no schema yet
+  unit: null,        // { token, unit_id, palika }
+  district: null,    // { token }
+  view: 'dashboard',
+  reportingOpen: true,
+
+  palika: '',        // palika currently being worked on
+  reportDate: '',
+
+  draft: {},         // unsaved daily-return fields, keyed field -> string
+  pulse: null,       // last loaded server pulse
+  issues: null,      // reconciliation state from the server
+  entered: null,
+
+  caseDisease: 'dengue',
+  caseForm: emptyCase(''),
+  caseErrors: {},
+  editingId: null,
+  confirmDelete: null,
+
+  dashRange: '30',
+  scope: 'all',
+  dash: null,
+
+  llDisease: 'all',
+  llFrom: '', llTo: '', llQuery: '',
+  llPage: 0,
+  list: null,
+  listLoading: false,
+
+  outcomeFilter: 'all',
+  gateTab: 'unit',
+  gateError: ''
+};
+
+function emptyCase(date) {
+  return {
+    patient_name: '', age: '', age_unit: 'years', sex: '',
+    ward: '', tole: '', test_type: '', test_date: date || ''
+  };
+}
+
+var STORE_KEY = 'vbd.session.v1';
+function saveSession() {
+  try {
+    sessionStorage.setItem(STORE_KEY, JSON.stringify({ unit: S.unit, district: S.district }));
+  } catch (e) { /* private browsing — session simply won't survive a refresh */ }
+}
+function loadSession() {
+  try {
+    var raw = sessionStorage.getItem(STORE_KEY);
+    if (!raw) return;
+    var o = JSON.parse(raw);
+    S.unit = o.unit || null;
+    S.district = o.district || null;
+  } catch (e) { /* ignore */ }
+}
+function clearSession() {
+  try { sessionStorage.removeItem(STORE_KEY); } catch (e) {}
+}
+
+function activeToken() { return (S.unit && S.unit.token) || (S.district && S.district.token) || ''; }
+function writeToken()  { return (S.unit && S.unit.token) || (S.district && S.district.token) || ''; }
+function districtToken() { return S.district && S.district.token; }
+function isDistrict() { return !!districtToken(); }
+function signedIn() { return !!(S.unit || S.district); }
+
+function signOut(silent) {
+  var t = activeToken();
+  S.unit = null; S.district = null;
+  clearSession();
+  /* Fire and forget. The local session is already gone, so a server that is
+     slow or unreachable must not leave the user looking signed in. */
+  if (t && TRANSPORT !== 'none') {
+    try {
+      (TRANSPORT === 'gas' ? gasCall('apiLogout', [t]) : httpCall('apiLogout', [t]))
+        .catch(function () {});
+    } catch (e) { /* ignore */ }
+  }
+  S.view = 'dashboard';
+  render();
+  if (!silent) toast('Signed out.');
+}
+
+/* ----------------------------------------------------------------- boot -- */
+
+function start() {
+  loadSession();
+  rpc('apiBootstrap', activeToken())
+    .then(function (data) {
+      if (data && data.needsSetup) { S.needsSetup = data; render(); return; }
+      S.boot = data;
+      S.reportDate = data.today;
+      if (!S.palika) S.palika = S.unit ? S.unit.palika : (data.units[0] ? data.units[0].palika : '');
+      S.caseForm.test_date = data.today;
+      // A stored token that the server no longer recognises must not look valid.
+      if (!data.session) { S.unit = null; S.district = null; clearSession(); }
+      render();
+      if (signedIn()) loadDashboard();
+    })
+    .catch(function (e) {
+      /* Two very different reasons to land here, and the advice differs. A
+         connection problem is the reporter's to retry; anything else is
+         probably the administrator's to fix. Telling someone with no signal to
+         go and repair a database wastes a phone call to the district office. */
+      var offline = /connection|internet|reach the server|too long/i.test(e.message || '');
+      qs('#root').innerHTML =
+        '<div class="gate"><div class="box"><div class="top"></div><div class="inner">' +
+        '<div style="font-size:17px;font-weight:700">Cannot start</div>' +
+        '<div class="msg err">' + esc(e.message) + '</div>' +
+        '<div style="margin-top:12px">' +
+        '<button class="btn ghost" data-act="retry-setup">Try again</button></div>' +
+        (offline ? '' :
+          '<div class="hint">If you are the administrator: open the spreadsheet and run ' +
+          '<strong>VBD Surveillance ▸ Set up / repair database</strong>, then reload this page.</div>') +
+        '</div></div></div>';
+    });
+}
+
+/* --------------------------------------------------------------- render -- */
+
+/** Remember where the cursor is so a re-render never interrupts typing. */
+function captureFocus() {
+  var a = document.activeElement;
+  if (!a || !a.id) return null;
+  var st = null;
+  try { st = a.selectionStart; } catch (e) {}
+  return { id: a.id, start: st };
+}
+function restoreFocus(f) {
+  if (!f) return;
+  var el = document.getElementById(f.id);
+  if (!el) return;
+  el.focus();
+  if (f.start !== null && f.start !== undefined && el.setSelectionRange) {
+    try { el.setSelectionRange(f.start, f.start); } catch (e) {}
+  }
+}
+
+function render() {
+  var f = captureFocus();
+  var html;
+  if (S.needsSetup) {
+    html = viewNeedsSetup();
+  } else if (!S.boot) {
+    html = '<div class="busy"><div class="spin"></div></div>';
+  } else if (!signedIn()) {
+    html = viewGate();
+  } else {
+    html = viewShell();
+  }
+  qs('#root').innerHTML = html + '<div id="busy-host"></div>';
+  restoreFocus(f);
+}
+
+/* ------------------------------------------------------------ gate view -- */
+
+function logoMark(size) {
+  var url = S.boot && S.boot.config.logo_url;
+  if (url) return '<img src="' + esc(url) + '" alt="Government of Nepal emblem" style="width:' + size + 'px;height:' + size + 'px;object-fit:contain">';
+  // Built-in fallback so the app never shows a broken image.
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 64 64" role="img" aria-label="Government of Nepal">' +
+    '<circle cx="32" cy="32" r="30" fill="#003893"/>' +
+    '<path d="M32 12 L44 30 H36 L46 46 H18 L28 30 H20 Z" fill="#ffffff"/>' +
+    '<circle cx="32" cy="50" r="4" fill="#dc143c"/></svg>';
+}
+
+/**
+ * Shown when the spreadsheet has no schema yet. A focal person who was sent the
+ * link early needs to know it is not their fault; an administrator needs the
+ * exact function name to run.
+ */
+function viewNeedsSetup() {
+  var missing = (S.needsSetup && S.needsSetup.missing) || [];
+  return '' +
+  '<div class="gate"><div class="box"><div class="top"></div><div class="inner">' +
+    logoMark(56) +
+    '<div style="text-align:center">' +
+      '<div style="font-size:18px;font-weight:700;color:var(--blue)">Not ready yet</div>' +
+      '<div class="ne" style="font-size:13px;color:var(--muted);margin-top:4px">प्रणाली अझै तयार छैन</div>' +
+    '</div>' +
+    '<div class="msg warn">This reporting system has not been set up by the district office yet. ' +
+      'Nothing is wrong with your phone or your link — please try again later, or call the health office.</div>' +
+    '<details style="font-size:12.5px;color:var(--muted)">' +
+      '<summary style="cursor:pointer;font-weight:600;color:var(--ink-3)">For the administrator</summary>' +
+      '<div style="margin-top:10px;line-height:1.6">' +
+        'The spreadsheet is missing ' + missing.length + ' sheet' + (missing.length === 1 ? '' : 's') +
+        ': <code>' + esc(missing.join(', ')) + '</code>.' +
+        '<br><br>Open the Apps Script editor, choose <strong>provisionEverything</strong> ' +
+        'from the function list and press <strong>Run</strong> — or use the spreadsheet menu ' +
+        '<strong>VBD Surveillance ▸ Set up / repair database</strong>.' +
+        '<br><br>Do not run <code>apiBootstrap</code>; that is what this page calls to load ' +
+        'its data and it needs the database to exist first.' +
+      '</div>' +
+    '</details>' +
+    '<button class="btn ghost" data-act="retry-setup">Check again</button>' +
+  '</div></div></div>';
+}
+
+function viewGate() {
+  var c = S.boot.config;
+  var unitTab = S.gateTab === 'unit';
+  var opts = S.boot.units.map(function (u) {
+    return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
+      esc(u.palika) + '</option>';
+  }).join('');
+
+  return '' +
+  '<div class="gate"><div class="box"><div class="top"></div><div class="inner">' +
+    logoMark(62) +
+    '<div style="text-align:center">' +
+      '<div class="ne" style="font-size:12.5px;color:var(--maroon);font-weight:600">नेपाल सरकार · स्वास्थ्य तथा जनसंख्या मन्त्रालय</div>' +
+      '<div style="font-size:18px;font-weight:700;color:var(--blue);margin-top:3px">VBD Surveillance</div>' +
+      '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">' + esc(c.office_name) + ' · ' + esc(c.province) + '</div>' +
+    '</div>' +
+
+    '<div class="btn-row" style="gap:6px">' +
+      '<button class="btn sm ' + (unitTab ? 'on' : '') + '" data-act="gate-tab" data-tab="unit" style="flex:1">Palika focal person</button>' +
+      '<button class="btn sm ' + (!unitTab ? 'on' : '') + '" data-act="gate-tab" data-tab="district" style="flex:1">District office</button>' +
+    '</div>' +
+
+    (unitTab
+      ? '<label class="field"><span class="cap">Your palika <span>पालिका</span></span>' +
+          '<select id="gate-palika" data-field="gate-palika">' + opts + '</select></label>' +
+        '<label class="field"><span class="cap">Access code <span>पहुँच कोड</span></span>' +
+          '<input id="gate-code" data-field="gate-code" type="password" autocomplete="off" ' +
+          'style="letter-spacing:.14em" placeholder="6-character code"></label>' +
+        '<div class="hint">The district office issues this code. If you have lost it, call the health office for a new one.</div>'
+      : '<label class="field"><span class="cap">District access code <span>जिल्ला कोड</span></span>' +
+          '<input id="gate-code" data-field="gate-code" type="password" autocomplete="off" ' +
+          'style="letter-spacing:.14em" placeholder="District code"></label>' +
+        '<div class="hint">District staff only. This code unlocks patient names on the line list.</div>') +
+
+    (S.gateError ? '<div class="msg err">' + esc(S.gateError) + '</div>' : '') +
+    '<button class="btn primary" data-act="' + (unitTab ? 'login-unit' : 'login-district') + '">Sign in</button>' +
+    '<div class="hint" style="text-align:center;font-size:11.5px;color:var(--muted-4)">' +
+      'Patient names are stored on the district line list and are never published.</div>' +
+  '</div></div></div>';
+}
+
+/* ----------------------------------------------------------- app shell -- */
+
+function currentPalikaNe() {
+  var u = findUnit(S.palika);
+  return u ? u.palika_ne : '';
+}
+function findUnit(palika) {
+  var us = S.boot.units;
+  for (var i = 0; i < us.length; i++) if (us[i].palika === palika) return us[i];
+  return null;
+}
+
+function viewShell() {
+  var c = S.boot.config;
+  var who = S.unit ? S.unit.palika : 'District office';
+
+  var body;
+  if (S.view === 'dashboard') body = viewDashboard();
+  else if (S.view === 'daily') body = viewDaily();
+  else if (S.view === 'cases') body = viewCases();
+  else if (S.view === 'linelist') body = viewLineList();
+  else if (S.view === 'outcome') body = viewOutcome();
+  else body = viewDashboard();
+
+  return '' +
+  '<div class="flagbar"></div>' +
+
+  '<div class="util">' +
+    '<span class="ne">' + esc(bsLong(S.boot.today)) + ' · आ.व. ' + esc(c.fiscal_year) + '</span>' +
+    '<span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">' +
+      '<span>' + esc(fmtDate(S.boot.today)) + '</span>' +
+      '<span class="sep">|</span>' +
+      '<span>' + esc(who) + (isDistrict() ? ' · line list unlocked' : '') + '</span>' +
+      '<span class="sep">|</span>' +
+      '<a href="#" data-act="signout" style="color:#fff">Sign out</a>' +
+    '</span>' +
+  '</div>' +
+
+  '<header class="masthead">' +
+    logoMark(56) +
+    '<div style="min-width:0">' +
+      '<div class="ministry">नेपाल सरकार · स्वास्थ्य तथा जनसंख्या मन्त्रालय</div>' +
+      '<div class="title">VBD Surveillance · Vector-Borne Disease Surveillance</div>' +
+      '<div class="office">' + esc(c.office_name) + ' · ' + esc(c.province) + '</div>' +
+    '</div>' +
+    '<div class="right">' +
+      '<span class="pill">Daily reporting system</span><br>' + esc(fmtDate(S.boot.today)) +
+    '</div>' +
+  '</header>' +
+
+  (c.notice_text
+    ? '<div class="notice"><span class="tag">Notice</span><span>' + esc(c.notice_text) + '</span></div>'
+    : '') +
+
+  '<div class="shell">' + viewSide() + '<main class="main">' + body + '</main></div>';
+}
+
+function navBtn(key, en, ne, extra) {
+  var on = S.view === key;
+  return '<button class="' + (on ? 'on' : '') + '" data-act="nav" data-view="' + key + '">' +
+    '<span class="dot"></span>' +
+    '<span class="labels"><span class="en">' + esc(en) + '</span>' +
+    '<span class="np">' + esc(ne) + '</span></span>' + (extra || '') + '</button>';
+}
+
+function viewSide() {
+  var reportingOn = S.view === 'daily' || S.view === 'cases';
+  var palikaOpts = S.boot.units.map(function (u) {
+    return '<option value="' + esc(u.palika) + '"' + (u.palika === S.scope ? ' selected' : '') + '>' +
+      esc(u.palika) + '</option>';
+  }).join('');
+
+  return '' +
+  '<aside class="side">' +
+    '<div class="side-head">Menu <span class="ne">मेनु</span></div>' +
+    '<nav class="nav">' +
+      navBtn('dashboard', 'Dashboard', 'ड्यासबोर्ड') +
+
+      '<div style="display:flex;flex-direction:column;gap:2px">' +
+        '<button class="' + (reportingOn ? 'on' : '') + '" data-act="toggle-reporting">' +
+          '<span class="dot" style="background:var(--blue)"></span>' +
+          '<span class="labels"><span class="en">Reporting</span><span class="np">रिपोर्टिङ</span></span>' +
+          '<span class="chev' + (S.reportingOpen ? ' open' : '') + '">▼</span>' +
+        '</button>' +
+        (S.reportingOpen
+          ? '<div class="subnav">' +
+              navBtn('daily', 'Daily numbers', 'दैनिक विवरण') +
+              navBtn('cases', 'Positive cases', 'पोजिटिभ बिरामी') +
+            '</div>'
+          : '') +
+      '</div>' +
+
+      navBtn('linelist', 'Line list', 'लाइन लिस्ट', isDistrict() ? '' : '<span class="chev">🔒</span>') +
+      navBtn('outcome', 'Outcome', 'नतिजा', isDistrict() ? '' : '<span class="chev">🔒</span>') +
+    '</nav>' +
+
+    '<div class="side-foot">' +
+      '<label class="lbl">Viewing <span class="ne">क्षेत्र</span></label>' +
+      '<select id="side-scope" data-field="scope">' +
+        '<option value="all"' + (S.scope === 'all' ? ' selected' : '') + '>' +
+          esc(S.boot.config.district_name) + ' District — all</option>' + palikaOpts +
+      '</select>' +
+      '<div class="hint" style="margin-top:10px">' +
+        esc(S.unit ? S.unit.palika : 'District office') + '<br>' + esc(fmtDate(S.boot.today)) +
+      '</div>' +
+    '</div>' +
+  '</aside>';
+}
+
+function scopeBar() {
+  var isAll = S.scope === 'all';
+  var u = isAll ? null : findUnit(S.scope);
+  return '<div class="scopebar">' +
+    '<span class="k">Viewing</span>' +
+    '<span class="v">' + esc(isAll ? S.boot.config.district_name + ' District' : S.scope) + '</span>' +
+    '<span class="ne" style="font-size:12.5px;color:var(--muted)">' +
+      esc(isAll ? S.boot.config.district_name_ne + ' जिल्ला' : (u ? u.palika_ne : '')) + '</span>' +
+    (isAll
+      ? '<span class="hint" style="margin-left:auto">Pick a palika in the sidebar to view it alone.</span>'
+      : '<button class="btn ghost sm noprint" data-act="clear-scope" style="margin-left:auto">View whole district</button>') +
+  '</div>';
+}
+
+/* ------------------------------------------------------------ dashboard -- */
+
+function loadDashboard() {
+  return rpc('apiDashboard', activeToken(), S.dashRange, S.scope)
+    .then(function (d) { S.dash = d; render(); })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+function viewDashboard() {
+  if (!S.dash) return scopeBar() + '<div class="hint">Loading district figures…</div>';
+  var d = S.dash;
+
+  var ranges = [['today', 'Today'], ['7', '7 days'], ['30', '30 days'], ['all', 'All']]
+    .map(function (r) {
+      return '<button class="btn sm ' + (S.dashRange === r[0] ? 'on' : '') + '" ' +
+        'data-act="range" data-range="' + r[0] + '">' + esc(r[1]) + '</button>';
+    }).join('');
+
+  var palikaOpts = S.boot.units.map(function (u) {
+    return '<option value="' + esc(u.palika) + '"' + (u.palika === S.scope ? ' selected' : '') + '>' +
+      esc(u.palika) + '</option>';
+  }).join('');
+
+  return '' +
+  scopeBar() +
+  '<header style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px">' +
+    '<div><h1 class="page">District dashboard</h1>' +
+    '<div class="page-sub">जिल्ला ड्यासबोर्ड · सार्वजनिक</div></div>' +
+    '<div class="hint" style="text-align:right">Cumulative = all data to date<br>' +
+      '<span style="color:var(--muted-4)">Last updated ' + esc(fmtDate(d.today)) + ' · ' + esc(bs(d.today)) + '</span></div>' +
+  '</header>' +
+
+  '<section class="card noprint" style="padding:14px 18px;margin-bottom:22px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:18px">' +
+    '<div><div class="k" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin-bottom:7px">' +
+      'Period <span class="ne" style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--muted-4)">अवधि</span></div>' +
+      '<div class="btn-row">' + ranges + '</div></div>' +
+    '<label class="field" style="min-width:220px"><span class="cap">Palika <span>पालिका</span></span>' +
+      '<select id="dash-scope" data-field="scope"><option value="all"' + (S.scope === 'all' ? ' selected' : '') + '>' +
+        esc(S.boot.config.district_name) + ' District — all</option>' + palikaOpts + '</select></label>' +
+    '<div class="btn-row" style="margin-left:auto">' +
+      '<button class="btn ghost" data-act="export" data-what="summary">Download summary (CSV)</button>' +
+      '<button class="btn ghost" data-act="export" data-what="pulses">Download daily numbers (CSV)</button>' +
+      '<button class="btn" data-act="print">Print / PDF</button>' +
+    '</div>' +
+    '<div class="hint" style="flex:1 0 100%">Showing <strong>' + esc(d.rangeLabel) + '</strong> · ' +
+      esc(S.scope === 'all' ? 'all palikas' : S.scope) + '. Cumulative columns always cover all data to date.</div>' +
+  '</section>' +
+
+  '<div class="g-board">' + d.boards.map(board).join('') + '</div>' +
+  completenessPanel(d.completeness);
+}
+
+function board(b) {
+  var rl = S.dash.rangeLabel;
+  var cards = [
+    { l: 'Positive · ' + rl,  n: 'पोजिटिभ',    v: b.total.posRange,   c: b.accent },
+    { l: 'Cumulative cases',  n: 'कुल बिरामी',  v: b.total.posCum,     c: 'var(--ink)' },
+    { l: 'Tests · ' + rl,     n: 'परीक्षण',    v: b.total.testsRange, c: 'var(--ink)' },
+    { l: 'Cumulative tests',  n: 'कुल परीक्षण', v: b.total.testsCum,   c: 'var(--ink)' }
+  ].map(function (k) {
+    return '<div class="stat"><div class="v" style="color:' + k.c + '">' + k.v + '</div>' +
+      '<div class="l">' + esc(k.l) + '</div><div class="n">' + esc(k.n) + '</div></div>';
+  }).join('');
+
+  var counts = b.curve.counts;
+  var max = Math.max(3, Math.max.apply(null, counts.concat([0])));
+  var bars = counts.map(function (n, i) {
+    return '<div class="bar" title="' + esc(bs(b.curve.days[i]) + ' · ' + n + ' positive') + '">' +
+      '<i style="height:' + (n / max * 100).toFixed(1) + '%;background:' + b.accentSoft + '"></i></div>';
+  }).join('');
+
+  // 7-day trailing mean, drawn over the bars.
+  var step = 100 / Math.max(1, counts.length - 1);
+  var pts = counts.map(function (_, i) {
+    var w = counts.slice(Math.max(0, i - 6), i + 1);
+    var m = w.reduce(function (a, x) { return a + x; }, 0) / w.length;
+    return (i * step).toFixed(2) + ',' + (100 - m / max * 100).toFixed(2);
+  }).join(' ');
+
+  var days = b.curve.days;
+  var tickAt = [0, Math.floor(days.length / 3), Math.floor(days.length * 2 / 3), days.length - 1];
+  var ticks = tickAt.map(function (i) {
+    var p = bs(days[i]).split(' ');
+    return '<span>' + esc(p[0] + ' ' + (p[1] || '')) + '</span>';
+  }).join('');
+
+  var rows = b.rows.map(function (r) {
+    return '<tr>' +
+      '<td><span style="display:flex;align-items:center;gap:7px">' +
+        '<span title="' + (r.reported ? 'Reported today' : 'Has not reported today') + '" ' +
+        'style="width:5px;height:5px;border-radius:50%;flex:0 0 auto;background:' +
+        (r.reported ? 'var(--ok)' : '#d98b8b') + '"></span>' + esc(r.palikaShort) + '</span></td>' +
+      '<td class="num">' + r.testsRange + '</td>' +
+      '<td class="num">' + r.testsCum + '</td>' +
+      '<td class="num" style="color:' + (r.posRange > 0 ? b.accent : 'var(--muted-4)') + ';font-weight:500">' + r.posRange + '</td>' +
+      '<td class="num" style="color:var(--ink-2);font-weight:500">' + r.posCum + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var rangeShort = S.dashRange === 'all' ? 'all' : (S.dashRange === 'today' ? 'today' : S.dashRange + 'd');
+
+  return '' +
+  '<section class="card" style="overflow:hidden">' +
+    '<div class="card-head" style="background:' + b.accent + '">' +
+      '<div class="t">' + esc(b.label) + '</div><div class="n">' + esc(b.labelNe) + '</div></div>' +
+
+    '<div class="stats">' + cards + '</div>' +
+
+    '<div style="padding:20px 20px 6px">' +
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px">' +
+        '<div class="section-title">Epidemic curve · positives per day</div>' +
+        '<div class="hint">last ' + days.length + ' days · by test date</div></div>' +
+      '<div class="curve">' +
+        '<div class="yaxis"><span>' + max + '</span><span>' + Math.round(max / 2) + '</span><span>0</span></div>' +
+        '<div class="plot">' + bars +
+          '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
+            '<polyline points="' + pts + '" fill="none" stroke="' + b.accent + '" stroke-width="1.6" ' +
+            'vector-effect="non-scaling-stroke" stroke-linejoin="round" opacity="0.85"></polyline></svg>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ticks">' + ticks + '</div>' +
+      '<div class="legend">' +
+        '<span><span style="width:11px;height:9px;background:' + b.accentSoft + '"></span>daily positives</span>' +
+        '<span><span style="width:14px;height:2px;background:' + b.accent + '"></span>7-day average</span>' +
+      '</div>' +
+    '</div>' +
+
+    '<div style="padding:20px">' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">' +
+        '<div class="section-title">By palika</div></div>' +
+      '<div class="tablewrap"><table><thead><tr>' +
+        '<th>Palika</th>' +
+        '<th class="r">Tests<small>' + esc(rangeShort) + '</small></th>' +
+        '<th class="r">Tests<small>cumulative</small></th>' +
+        '<th class="r">Positive<small>' + esc(rangeShort) + '</small></th>' +
+        '<th class="r">Cases<small>cumulative</small></th>' +
+      '</tr></thead><tbody>' + rows +
+        '<tr class="total"><td>Total <span class="ne" style="font-weight:400;color:var(--ink-4);font-size:11px">जम्मा</span></td>' +
+        '<td class="num">' + b.total.testsRange + '</td>' +
+        '<td class="num">' + b.total.testsCum + '</td>' +
+        '<td class="num">' + b.total.posRange + '</td>' +
+        '<td class="num">' + b.total.posCum + '</td></tr>' +
+      '</tbody></table></div>' +
+    '</div>' +
+  '</section>';
+}
+
+function completenessPanel(c) {
+  var chips = function (list, cls) {
+    if (!list.length) return '<div class="hint">None.</div>';
+    return '<div style="display:flex;flex-wrap:wrap;gap:7px">' + list.map(function (p) {
+      return '<span class="chip ' + cls + '">' + esc(p) + '</span>';
+    }).join('') + '</div>';
+  };
+
+  return '' +
+  '<section class="card" style="margin-top:26px;padding:22px 24px">' +
+    '<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px">' +
+      '<div><div style="font-size:16px;font-weight:700">Reporting completeness · today</div>' +
+      '<div class="ne" style="font-size:12px;color:var(--muted);margin-top:3px">आजको रिपोर्टिङ पूर्णता</div></div>' +
+      '<div style="display:flex;align-items:center;gap:14px">' +
+        '<div class="mono" style="font-size:22px;font-weight:600">' + c.reported.length + ' / ' + c.total + '</div>' +
+        '<button class="btn ghost noprint" data-act="copy-missing">Copy the list to call</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="bar-track" style="margin-bottom:20px"><div class="bar-fill" style="width:' + c.pct + '%"></div></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px">' +
+      '<div><div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ok);margin-bottom:10px">' +
+        'Reported <span class="ne" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">रिपोर्ट गरेको</span></div>' +
+        chips(c.reported, 'ok') + '</div>' +
+      '<div><div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--err-ink);margin-bottom:10px">' +
+        'Not yet reported <span class="ne" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">रिपोर्ट नगरेको</span></div>' +
+        chips(c.notReported, 'no') + '</div>' +
+    '</div>' +
+  '</section>';
+}
+
+/* -------------------------------------------------------- daily numbers -- */
+
+function loadPulse() {
+  return rpc('apiGetPulse', writeToken(), S.palika, S.reportDate)
+    .then(function (d) {
+      S.pulse = d.pulse;
+      S.issues = d.issues;
+      S.entered = d.entered;
+      S.draft = {};   // server state is now the truth for this palika/date
+      render();
+    })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+/** Current value of a daily-return field: unsaved draft first, then saved row. */
+function dv(field) {
+  if (S.draft[field] !== undefined) return S.draft[field];
+  if (S.pulse && S.pulse[field] !== undefined && S.pulse[field] !== null && S.pulse[field] !== '') {
+    return String(S.pulse[field]);
+  }
+  return '';
+}
+
+/**
+ * "Nothing to report today" state. Held separately from dv() because a saved
+ * boolean false stringifies to "false", which is truthy.
+ */
+function nilChecked() {
+  if (S.draft.nil_report !== undefined) return S.draft.nil_report === '1';
+  return !!(S.pulse && S.pulse.nil_report === true);
+}
+
+/** Recompute reconciliation locally so the reporter sees it as they type. */
+function localIssues() {
+  var out = {};
+  var ds = S.boot.diseases;
+  var nil = nilChecked();
+  Object.keys(ds).forEach(function (k) {
+    var d = ds[k];
+    // A nil return means every count is zero, so the reporter is never asked to
+    // reconcile figures they have explicitly said do not exist.
+    var tests = nil ? 0 : d.fields.reduce(function (a, f) { return a + num(dv(k + '_' + f[0])); }, 0);
+    var suspects = nil ? 0 : num(dv(k + '_suspects'));
+    var declared = nil ? 0 : num(dv(k + '_positives'));
+    var have = num((S.entered || {})[k]);
+
+    var level = null, message = '';
+    if (declared > tests) {
+      level = 'error';
+      message = 'Positives (' + declared + ') cannot exceed tests done (' + tests + ').';
+    } else if (have > declared) {
+      level = 'error';
+      message = have + ' ' + d.labelLower + ' case' + (have === 1 ? '' : 's') +
+        ' already on the line list for this date, but only ' + declared + ' positive' +
+        (declared === 1 ? '' : 's') + ' declared. Raise the number or delete the extra case' +
+        (have - declared === 1 ? '' : 's') + '.';
+    } else if (have < declared) {
+      level = 'warn';
+      message = 'Declared ' + declared + ' positive' + (declared === 1 ? '' : 's') + ' but ' +
+        have + ' case' + (have === 1 ? '' : 's') + ' entered — add ' + (declared - have) +
+        ' more on the Positive cases screen.';
+    } else if (tests > 0 && suspects < tests) {
+      level = 'warn';
+      message = 'Suspects (' + suspects + ') is fewer than tests done (' + tests +
+        '). You can still save, but check the figures.';
+    }
+    out[k] = { tests: tests, suspects: suspects, declared: declared, entered: have,
+               remaining: declared - have, level: level, message: message };
+  });
+  return out;
+}
+
+function viewDaily() {
+  var ds = S.boot.diseases;
+  var iss = localIssues();
+  var blocked = Object.keys(iss).some(function (k) { return iss[k].level === 'error'; });
+  var saved = !!S.pulse;
+
+  var nil = nilChecked();
+  var dis = nil ? ' disabled' : '';
+
+  var blocks = Object.keys(ds).map(function (k) {
+    var d = ds[k];
+    var i = iss[k];
+
+    var testInputs = d.fields.map(function (f) {
+      return '<label class="field"><span class="cap" style="font-size:12px;color:var(--ink-4)">' + esc(f[1]) + '</span>' +
+        '<input class="num" id="f-' + k + '_' + f[0] + '" data-field="daily" data-name="' + k + '_' + f[0] + '" ' +
+        'type="number" min="0" inputmode="numeric" placeholder="0"' + dis + ' value="' + esc(dv(k + '_' + f[0])) + '"></label>';
+    }).join('');
+
+    var reconColor = i.entered === i.declared ? 'var(--ok)' : (i.entered > i.declared ? 'var(--err)' : 'var(--warn)');
+
+    return '' +
+    '<div style="border:1px solid var(--line-mid);border-radius:3px;overflow:hidden">' +
+      '<div style="padding:10px 14px;background:' + d.accent + ';color:#fff;font-size:13.5px;font-weight:700">' +
+        esc(d.label) + ' <span class="ne" style="font-weight:400;opacity:.85;font-size:12px">' + esc(d.labelNe) + '</span></div>' +
+      '<div style="padding:16px 14px;display:flex;flex-direction:column;gap:14px">' +
+
+        '<label class="field" style="max-width:220px"><span class="cap">Suspected cases seen <span>शंकास्पद</span></span>' +
+          '<input class="num" id="f-' + k + '_suspects" data-field="daily" data-name="' + k + '_suspects" ' +
+          'type="number" min="0" inputmode="numeric" placeholder="0"' + dis + ' value="' + esc(dv(k + '_suspects')) + '"></label>' +
+
+        '<div><div style="font-size:12.5px;font-weight:600;color:var(--ink-3);margin-bottom:8px">' +
+          'Tests done, by test type <span class="ne" style="font-weight:400;color:var(--muted-3)">परीक्षण</span></div>' +
+          '<div class="grid g3">' + testInputs + '</div></div>' +
+
+        '<div class="totrow"><span style="font-size:12.5px;color:var(--ink-4)">Total tests</span>' +
+          '<span class="v" data-tot="' + k + '">' + i.tests + '</span></div>' +
+
+        '<label class="field" style="max-width:220px"><span class="cap">Positive today <span>आज पोजिटिभ</span></span>' +
+          '<input class="num' + (i.level === 'error' ? ' err' : '') + '" id="f-' + k + '_positives" ' +
+          'data-field="daily" data-name="' + k + '_positives" type="number" min="0" inputmode="numeric" ' +
+          'placeholder="0"' + dis + ' value="' + esc(dv(k + '_positives')) + '">' +
+          '<span class="sub" data-recon="' + k + '" style="color:' + reconColor + '">' +
+            i.entered + ' of ' + i.declared + ' entered on the line list</span></label>' +
+
+        '<div data-msg="' + k + '">' + (i.level
+          ? '<div class="msg ' + (i.level === 'error' ? 'err' : 'warn') + '">' + esc(i.message) + '</div>'
+          : '') + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var maxBack = S.boot.config.allow_backdate_days;
+  var minDate = maxBack > 0 ? addDays(S.boot.today, -maxBack) : '';
+
+  return '' +
+  scopeBar() +
+  '<div style="max-width:1180px">' +
+    '<header style="margin-bottom:16px">' +
+      '<h1 class="page">Daily numbers</h1>' +
+      '<div class="page-sub">दैनिक विवरण · ' + esc(S.palika) + '</div>' +
+    '</header>' +
+
+    '<section class="card" style="border-left:4px solid ' + (blocked ? 'var(--err)' : (saved ? 'var(--ok)' : 'var(--blue)')) +
+      ';padding:14px 18px;margin-bottom:22px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 26px">' +
+      statusItem('Status', saved ? 'Submitted' : 'Not submitted', saved ? 'var(--ok)' : 'var(--warn)') +
+      statusItem('Report date', fmtDate(S.reportDate), 'var(--ink-3)') +
+      statusItem('Line list', (S.entered ? (num(S.entered.dengue) + num(S.entered.scrub)) : 0) + ' case(s) entered', 'var(--ink-3)') +
+      '<div class="noprint" style="margin-left:auto">' +
+        '<button class="btn ghost" data-act="nav" data-view="cases">Go to positive cases</button></div>' +
+    '</section>' +
+
+    '<div class="card grid g-wide" style="gap:16px;margin-bottom:22px;padding:16px 18px">' +
+      '<label class="field"><span class="cap">Report date <span>रिपोर्ट मिति</span></span>' +
+        '<input id="d-date" data-field="report-date" type="date" value="' + esc(S.reportDate) + '" ' +
+        'max="' + esc(S.boot.today) + '"' + (minDate ? ' min="' + esc(minDate) + '"' : '') + '>' +
+        '<span class="bs">' + esc(bs(S.reportDate)) + '</span></label>' +
+      '<label class="field"><span class="cap">Palika <span>पालिका</span></span>' +
+        (S.unit
+          ? '<input value="' + esc(S.palika) + '" disabled>' +
+            '<span class="sub">You can only report for your own palika.</span>'
+          : '<select id="d-palika" data-field="work-palika">' + S.boot.units.map(function (u) {
+              return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
+                esc(u.palika) + '</option>';
+            }).join('') + '</select><span class="sub">District session — choose the palika you are entering for.</span>') +
+      '</label>' +
+    '</div>' +
+
+    '<section class="card">' +
+      '<div class="card-head"><div class="t">Daily numbers · both diseases</div>' +
+        '<div class="n">दैनिक विवरण · दुवै रोग</div></div>' +
+      '<div class="card-body" style="gap:22px">' +
+        '<div class="hint">One row per palika per day covers both diseases — fill what applies and submit once. ' +
+          'Totals are computed on save. Re-submitting this date overwrites the previous figures.</div>' +
+
+        '<label class="nilbox' + (nil ? ' on' : '') + '">' +
+          '<input type="checkbox" id="d-nil" data-field="nil-report"' + (nil ? ' checked' : '') + '>' +
+          '<span><span style="font-size:13.5px;font-weight:600;color:var(--ink-3)">' +
+            'Nothing to report today <span class="ne" style="font-weight:400;color:var(--muted-3)">आज केही छैन</span></span>' +
+            '<div class="hint" style="margin-top:3px">Tick this when no suspected case was seen and no test was done. ' +
+            'It still counts as reporting — a silent day and a nil day are not the same thing to the district.</div>' +
+          '</span>' +
+        '</label>' +
+
+        '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px">' + blocks + '</div>' +
+
+        '<label class="field"><span class="cap">Remarks · optional <span>कैफियत</span></span>' +
+          '<textarea id="d-remarks" data-field="daily" data-name="remarks" rows="2" ' +
+          'placeholder="Stockout, referral, anything the district should know">' + esc(dv('remarks')) + '</textarea></label>' +
+
+        '<div class="btn-row" style="gap:14px">' +
+          '<button class="btn primary" data-act="save-pulse"' + (blocked ? ' disabled' : '') + '>' +
+            (saved ? 'Update today’s return' : 'Submit daily return') + '</button>' +
+          '<span class="hint" data-note="pulse" style="flex:1;min-width:200px">' +
+            (blocked ? 'Fix the figures marked in red before submitting.'
+                     : 'Check the numbers, then submit. The district sees it immediately.') + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</section>' +
+  '</div>';
+}
+
+function statusItem(label, value, color) {
+  return '<div style="min-width:150px">' +
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-2)">' +
+      esc(label) + '</div>' +
+    '<div style="font-size:14.5px;font-weight:600;color:' + color + ';margin-top:3px">' + esc(value) + '</div></div>';
+}
+
+/**
+ * Patch only the derived parts of the daily screen. Re-rendering the whole
+ * screen on every keystroke would fight the on-screen keyboard on a phone.
+ */
+function patchDaily() {
+  var iss = localIssues();
+  Object.keys(iss).forEach(function (k) {
+    var i = iss[k];
+    var tot = qs('[data-tot="' + k + '"]');
+    if (tot) tot.textContent = i.tests;
+
+    var rec = qs('[data-recon="' + k + '"]');
+    if (rec) {
+      rec.textContent = i.entered + ' of ' + i.declared + ' entered on the line list';
+      rec.style.color = i.entered === i.declared ? 'var(--ok)' : (i.entered > i.declared ? 'var(--err)' : 'var(--warn)');
+    }
+
+    var msg = qs('[data-msg="' + k + '"]');
+    if (msg) {
+      msg.innerHTML = i.level
+        ? '<div class="msg ' + (i.level === 'error' ? 'err' : 'warn') + '">' + esc(i.message) + '</div>' : '';
+    }
+    var pos = document.getElementById('f-' + k + '_positives');
+    if (pos) pos.className = 'num' + (i.level === 'error' ? ' err' : '');
+  });
+
+  var blocked = Object.keys(iss).some(function (k) { return iss[k].level === 'error'; });
+  var btn = qs('[data-act="save-pulse"]');
+  if (btn) btn.disabled = blocked;
+  var note = qs('[data-note="pulse"]');
+  if (note && !note.dataset.sticky) {
+    note.textContent = blocked ? 'Fix the figures marked in red before submitting.'
+                               : 'Check the numbers, then submit. The district sees it immediately.';
+  }
+}
+
+function savePulse() {
+  var nil = nilChecked();
+  var payload = {
+    palika: S.palika, report_date: S.reportDate,
+    remarks: dv('remarks'), nil_report: nil
+  };
+  Object.keys(S.boot.diseases).forEach(function (k) {
+    payload[k + '_suspects'] = nil ? 0 : num(dv(k + '_suspects'));
+    payload[k + '_positives'] = nil ? 0 : num(dv(k + '_positives'));
+    S.boot.diseases[k].fields.forEach(function (f) {
+      payload[k + '_' + f[0]] = nil ? 0 : num(dv(k + '_' + f[0]));
+    });
+  });
+
+  rpc('apiSavePulse', writeToken(), payload)
+    .then(function (r) {
+      if (!r.saved) { toast(r.message, 'err'); return; }
+      S.pulse = r.pulse; S.issues = r.issues; S.entered = r.entered; S.draft = {};
+      render();
+      toast(r.message);
+      loadDashboard();
+    })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+/* -------------------------------------------------------- positive cases -- */
+
+function viewCases() {
+  var ds = S.boot.diseases;
+  var d = ds[S.caseDisease];
+  var iss = localIssues();
+  var q = iss[S.caseDisease];
+  var e = S.caseErrors;
+
+  var quota, quotaCls;
+  if (S.editingId) {
+    quota = 'Editing ' + S.editingId + ' — the declared count of ' + q.declared + ' is unchanged.';
+    quotaCls = 'warn';
+  } else if (!q.declared) {
+    quota = 'No ' + d.labelLower + ' positives are declared for this date yet. Enter the count on the ' +
+      'Daily numbers screen first, then add that many cases here.';
+    quotaCls = 'err';
+  } else if (q.entered >= q.declared) {
+    quota = 'All ' + q.declared + ' declared ' + d.labelLower + ' positive' + (q.declared === 1 ? '' : 's') +
+      ' for this date are entered. Raise the count on Daily numbers to add more.';
+    quotaCls = q.entered > q.declared ? 'err' : 'ok';
+  } else {
+    quota = q.remaining + ' of ' + q.declared + ' declared ' + d.labelLower + ' positive' +
+      (q.declared === 1 ? '' : 's') + ' still to enter for this date.';
+    quotaCls = 'warn';
+  }
+
+  var toggles = Object.keys(ds).map(function (k) {
+    var on = k === S.caseDisease;
+    return '<button class="btn ' + (on ? 'on' : '') + '" data-act="case-disease" data-disease="' + k + '" ' +
+      (on ? 'style="background:' + ds[k].accent + ';border-color:' + ds[k].accent + '"' : '') + '>' +
+      esc(ds[k].label) + '</button>';
+  }).join('');
+
+  var testOpts = ['<option value="">Select</option>'].concat(d.testTypes.map(function (t) {
+    return '<option value="' + esc(t) + '"' + (S.caseForm.test_type === t ? ' selected' : '') + '>' + esc(t) + '</option>';
+  })).join('');
+
+  var sexOpts = ['', 'Male', 'Female', 'Other'].map(function (v) {
+    var label = v === '' ? 'Select' : (v === 'Male' ? 'Male · पुरुष' : v === 'Female' ? 'Female · महिला' : 'Other · अन्य');
+    return '<option value="' + esc(v) + '"' + (S.caseForm.sex === v ? ' selected' : '') + '>' + esc(label) + '</option>';
+  }).join('');
+
+  return '' +
+  scopeBar() +
+  '<div style="max-width:1180px">' +
+    '<header style="margin-bottom:16px">' +
+      '<h1 class="page">Positive cases</h1>' +
+      '<div class="page-sub">पोजिटिभ बिरामी · ' + esc(S.palika) + '</div>' +
+    '</header>' +
+
+    '<div class="card grid g-wide" style="gap:16px;margin-bottom:22px;padding:16px 18px">' +
+      '<label class="field"><span class="cap">Report date <span>रिपोर्ट मिति</span></span>' +
+        '<input id="c-date" data-field="report-date" type="date" value="' + esc(S.reportDate) + '" max="' + esc(S.boot.today) + '">' +
+        '<span class="bs">' + esc(bs(S.reportDate)) + '</span></label>' +
+      '<div class="field"><span class="cap">Palika <span>पालिका</span></span>' +
+        (S.unit ? '<input value="' + esc(S.palika) + '" disabled>'
+                : '<select id="c-palika" data-field="work-palika">' + S.boot.units.map(function (u) {
+                    return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
+                      esc(u.palika) + '</option>'; }).join('') + '</select>') +
+      '</div>' +
+    '</div>' +
+
+    '<section class="card">' +
+      '<div class="card-head" style="background:' + d.accent + '">' +
+        '<div class="t">' + (S.editingId ? 'Edit case ' + esc(S.editingId) : 'Add a positive case') + '</div>' +
+        '<div class="n">पोजिटिभ बिरामी</div></div>' +
+      '<div class="card-body" style="gap:16px">' +
+
+        '<div><div style="font-size:12.5px;font-weight:600;color:var(--ink-3);margin-bottom:8px">' +
+          'Disease <span class="ne" style="font-weight:400;color:var(--muted-3)">रोग</span></div>' +
+          '<div class="btn-row">' + toggles + '</div></div>' +
+
+        '<div class="msg ' + quotaCls + '">' + esc(quota) + '</div>' +
+        '<div class="hint">Every row saved here counts as a positive case. Patient names stay on the district ' +
+          'line list and are never published.</div>' +
+
+        '<label class="field"><span class="cap">Patient name <span>बिरामीको नाम</span></span>' +
+          '<input id="c-name" class="' + (e.patient_name ? 'err' : '') + '" data-field="case" data-name="patient_name" ' +
+          'value="' + esc(S.caseForm.patient_name) + '" placeholder="Full name">' +
+          (e.patient_name ? '<span class="fe">' + esc(e.patient_name) + '</span>' : '') + '</label>' +
+
+        '<div class="grid g3">' +
+          '<label class="field"><span class="cap">Age <span>उमेर</span></span>' +
+            '<input id="c-age" class="num ' + (e.age ? 'err' : '') + '" data-field="case" data-name="age" ' +
+            'type="number" min="0" inputmode="numeric" value="' + esc(S.caseForm.age) + '" placeholder="0">' +
+            (e.age ? '<span class="fe">' + esc(e.age) + '</span>' : '') + '</label>' +
+          '<label class="field"><span class="cap">Unit <span>एकाइ</span></span>' +
+            '<select id="c-ageunit" data-field="case" data-name="age_unit">' +
+              '<option value="years"' + (S.caseForm.age_unit === 'years' ? ' selected' : '') + '>Years · वर्ष</option>' +
+              '<option value="months"' + (S.caseForm.age_unit === 'months' ? ' selected' : '') + '>Months · महिना</option>' +
+            '</select></label>' +
+          '<label class="field"><span class="cap">Sex <span>लिङ्ग</span></span>' +
+            '<select id="c-sex" class="' + (e.sex ? 'err' : '') + '" data-field="case" data-name="sex">' + sexOpts + '</select>' +
+            (e.sex ? '<span class="fe">' + esc(e.sex) + '</span>' : '') + '</label>' +
+        '</div>' +
+
+        '<div class="grid g3">' +
+          '<label class="field"><span class="cap">Ward no. <span>वडा नं.</span></span>' +
+            '<input id="c-ward" class="num ' + (e.ward ? 'err' : '') + '" data-field="case" data-name="ward" ' +
+            'type="number" min="1" inputmode="numeric" value="' + esc(S.caseForm.ward) + '" placeholder="1">' +
+            (e.ward ? '<span class="fe">' + esc(e.ward) + '</span>' : '') + '</label>' +
+          '<label class="field" style="grid-column:span 2"><span class="cap">Tole / settlement <span>टोल / बस्ती</span></span>' +
+            '<input id="c-tole" data-field="case" data-name="tole" value="' + esc(S.caseForm.tole) + '" ' +
+            'placeholder="e.g. Tumlingtar Bazaar"></label>' +
+        '</div>' +
+
+        '<div class="grid g2">' +
+          '<label class="field"><span class="cap">Test type <span>परीक्षणको प्रकार</span></span>' +
+            '<select id="c-test" class="' + (e.test_type ? 'err' : '') + '" data-field="case" data-name="test_type">' +
+            testOpts + '</select>' +
+            (e.test_type ? '<span class="fe">' + esc(e.test_type) + '</span>' : '') + '</label>' +
+          '<label class="field"><span class="cap">Test date <span>परीक्षण मिति</span></span>' +
+            '<input id="c-testdate" data-field="case" data-name="test_date" type="date" ' +
+            'value="' + esc(S.caseForm.test_date) + '" max="' + esc(S.boot.today) + '">' +
+            '<span class="bs">' + esc(bs(S.caseForm.test_date)) + '</span></label>' +
+        '</div>' +
+
+        '<div class="btn-row" style="gap:12px">' +
+          '<button class="btn primary" data-act="save-case">' +
+            (S.editingId ? 'Save changes' : 'Add to line list') + '</button>' +
+          (S.editingId ? '<button class="btn" data-act="cancel-edit">Cancel edit</button>' : '') +
+          '<span class="hint" style="flex:1;min-width:180px">Saved cases appear on the district line list immediately.</span>' +
+        '</div>' +
+      '</div>' +
+    '</section>' +
+  '</div>';
+}
+
+function saveCase() {
+  var p = {};
+  Object.keys(S.caseForm).forEach(function (k) { p[k] = S.caseForm[k]; });
+  p.palika = S.palika;
+  p.disease = S.caseDisease;
+  p.case_id = S.editingId || '';
+  if (!p.test_date) p.test_date = S.reportDate;
+
+  rpc('apiSaveCase', writeToken(), p)
+    .then(function (r) {
+      if (!r.saved) {
+        S.caseErrors = r.errors || {};
+        render();
+        toast(r.message, 'err');
+        return;
+      }
+      S.caseErrors = {};
+      S.editingId = null;
+      S.caseForm = emptyCase(S.reportDate);
+      toast(r.message);
+      // The declared/entered reconciliation has moved — refresh it.
+      return loadPulse().then(loadDashboard);
+    })
+    .catch(function (e) { toast(e.message, 'err'); });
+}
+
+/* ------------------------------------------------------------- line list -- */
+
+function unlockPanel(title) {
+  return '' +
+  '<section class="card" style="max-width:520px;padding:24px 26px;display:flex;flex-direction:column;gap:16px">' +
+    '<div><div style="font-size:17px;font-weight:700">' + esc(title) + ' is locked</div>' +
+      '<div class="ne" style="font-size:12.5px;color:var(--muted);margin-top:4px">यो पृष्ठ सुरक्षित छ</div></div>' +
+    '<div class="hint">This screen shows patient names. Enter the district access code to unlock it. ' +
+      'Names are never shown on the dashboard and never leave the district line list.</div>' +
+    '<label class="field"><span class="cap">District access code <span>जिल्ला कोड</span></span>' +
+      '<input id="unlock-code" data-field="unlock-code" type="password" autocomplete="off" ' +
+      'style="letter-spacing:.14em" placeholder="District code"></label>' +
+    (S.gateError ? '<div class="msg err">' + esc(S.gateError) + '</div>' : '') +
+    '<div class="btn-row"><button class="btn primary" data-act="unlock">Unlock</button></div>' +
+  '</section>';
+}
+
+function loadList() {
+  if (!isDistrict()) { render(); return Promise.resolve(); }
+  S.listLoading = true;
+  return rpc('apiListCases', districtToken(), {
+    disease: S.llDisease, scope: S.scope, from: S.llFrom, to: S.llTo,
+    query: S.llQuery, page: S.llPage, perPage: 50,
+    outcome: S.view === 'outcome' ? S.outcomeFilter : 'all'
+  }).then(function (d) { S.listLoading = false; S.list = d; render(); })
+    .catch(function (e) { S.listLoading = false; toast(e.message, 'err'); });
+}
+
+function diseaseFilterRow(current, actName) {
+  var ds = S.boot.diseases;
+  var opts = [['all', 'All diseases']].concat(Object.keys(ds).map(function (k) { return [k, ds[k].label]; }));
+  return opts.map(function (o) {
+    return '<button class="btn sm ' + (current === o[0] ? 'on' : '') + '" data-act="' + actName + '" ' +
+      'data-value="' + o[0] + '">' + esc(o[1]) + '</button>';
+  }).join('');
+}
+
+function viewLineList() {
+  if (!isDistrict()) return scopeBar() + unlockPanel('Line list');
+  if (!S.list) {
+    if (!S.listLoading) loadList();
+    return scopeBar() + '<div class="hint">Loading line list…</div>';
+  }
+
+  var ds = S.boot.diseases;
+  var rows = S.list.rows.map(function (c) {
+    var d = ds[c.disease] || { label: c.disease, accent: 'var(--ink)' };
+    var confirming = S.confirmDelete === c.case_id;
+    return '<tr>' +
+      '<td class="mono" style="font-size:12px;color:var(--muted-2)">' + esc(c.case_id) + '</td>' +
+      '<td><span style="color:' + d.accent + ';font-weight:600">' + esc(d.label) + '</span></td>' +
+      '<td>' + esc(c.patient_name) + '</td>' +
+      '<td class="mono">' + esc(c.age + ' ' + (c.age_unit === 'months' ? 'm' : 'y')) + '</td>' +
+      '<td>' + esc(c.sex) + '</td>' +
+      '<td>' + esc(c.palika) + '<div style="font-size:11.5px;color:var(--muted-3)">Ward ' + esc(c.ward) +
+        (c.tole ? ' · ' + esc(c.tole) : '') + '</div></td>' +
+      '<td>' + esc(c.test_type) + '</td>' +
+      '<td>' + esc(fmtDate(c.test_date)) + '<div class="ne" style="font-size:11.5px;color:var(--blue)">' +
+        esc(c.test_date_bs) + '</div></td>' +
+      '<td class="noprint"><div class="btn-row" style="gap:6px">' +
+        '<button class="btn sm" data-act="edit-case" data-id="' + esc(c.case_id) + '">Edit</button>' +
+        '<button class="btn sm" data-act="delete-case" data-id="' + esc(c.case_id) + '" ' +
+          (confirming ? 'style="background:var(--err);color:#fff;border-color:var(--err)"' : '') + '>' +
+          (confirming ? 'Confirm' : 'Delete') + '</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+
+  return '' +
+  scopeBar() +
+  '<header style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px">' +
+    '<div><h1 class="page">Line list</h1><div class="page-sub">लाइन लिस्ट · गोप्य</div></div>' +
+    '<div class="btn-row noprint">' +
+      '<button class="btn ghost" data-act="export" data-what="linelist">Download line list (CSV)</button>' +
+      '<button class="btn" data-act="print">Print / PDF</button></div>' +
+  '</header>' +
+
+  '<section class="card noprint" style="padding:14px 18px;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">' +
+    '<div><div class="lbl">Disease</div><div class="btn-row">' + diseaseFilterRow(S.llDisease, 'll-disease') + '</div></div>' +
+    '<label class="field" style="min-width:150px"><span class="cap">From</span>' +
+      '<input id="ll-from" data-field="ll-from" type="date" value="' + esc(S.llFrom) + '"></label>' +
+    '<label class="field" style="min-width:150px"><span class="cap">To</span>' +
+      '<input id="ll-to" data-field="ll-to" type="date" value="' + esc(S.llTo) + '"></label>' +
+    '<label class="field" style="min-width:200px;flex:1"><span class="cap">Search name, tole or case ID</span>' +
+      '<input id="ll-q" data-field="ll-query" value="' + esc(S.llQuery) + '" placeholder="Type to filter"></label>' +
+    '<button class="btn" data-act="ll-reset">Reset</button>' +
+  '</section>' +
+
+  '<div class="hint" style="margin-bottom:10px">' + S.list.total + ' case(s) match. ' +
+    'Page ' + (S.list.page + 1) + ' of ' + S.list.pages + '.</div>' +
+
+  '<div class="tablewrap"><table><thead><tr>' +
+    '<th>Case ID</th><th>Disease</th><th>Patient</th><th>Age</th><th>Sex</th>' +
+    '<th>Palika / ward</th><th>Test</th><th>Test date</th><th class="noprint">Actions</th>' +
+  '</tr></thead><tbody>' +
+    (rows || '<tr><td colspan="9" class="hint" style="padding:18px">No cases match these filters.</td></tr>') +
+  '</tbody></table></div>' +
+
+  '<div class="btn-row noprint" style="margin-top:14px">' +
+    '<button class="btn" data-act="ll-page" data-delta="-1"' + (S.list.page <= 0 ? ' disabled' : '') + '>Previous</button>' +
+    '<button class="btn" data-act="ll-page" data-delta="1"' +
+      (S.list.page >= S.list.pages - 1 ? ' disabled' : '') + '>Next</button>' +
+  '</div>';
+}
+
+/* --------------------------------------------------------------- outcome -- */
+
+function viewOutcome() {
+  if (!isDistrict()) return scopeBar() + unlockPanel('Outcome');
+  if (!S.list) {
+    if (!S.listLoading) loadList();
+    return scopeBar() + '<div class="hint">Loading cases…</div>';
+  }
+
+  var oc = S.boot.outcomes;
+  var counts = { treatment: 0, recovered: 0, died: 0 };
+  S.list.rows.forEach(function (c) { if (counts[c.outcome] !== undefined) counts[c.outcome]++; });
+
+  var cards = Object.keys(oc).map(function (k) {
+    return '<div class="stat" style="background:' + oc[k].bg + ';border:1px solid ' + oc[k].border + '">' +
+      '<div class="v" style="color:' + oc[k].color + '">' + counts[k] + '</div>' +
+      '<div class="l">' + esc(oc[k].label) + '</div>' +
+      '<div class="n">' + esc(oc[k].labelNe) + '</div></div>';
+  }).join('');
+
+  var filters = [['all', 'All']].concat(Object.keys(oc).map(function (k) { return [k, oc[k].label]; }))
+    .map(function (o) {
+      return '<button class="btn sm ' + (S.outcomeFilter === o[0] ? 'on' : '') + '" ' +
+        'data-act="outcome-filter" data-value="' + o[0] + '">' + esc(o[1]) + '</button>';
+    }).join('');
+
+  var rows = S.list.rows.map(function (c) {
+    var d = S.boot.diseases[c.disease] || { label: c.disease, accent: 'var(--ink)' };
+    var pick = Object.keys(oc).map(function (k) {
+      var on = (c.outcome || 'treatment') === k;
+      return '<button class="btn sm ' + (on ? 'on' : '') + '" data-act="set-outcome" ' +
+        'data-id="' + esc(c.case_id) + '" data-outcome="' + k + '"' +
+        (on ? ' style="background:' + oc[k].color + ';border-color:' + oc[k].color + ';color:#fff"' : '') + '>' +
+        esc(oc[k].label) + '</button>';
+    }).join('');
+
+    return '<tr>' +
+      '<td class="mono" style="font-size:12px;color:var(--muted-2)">' + esc(c.case_id) + '</td>' +
+      '<td><span style="color:' + d.accent + ';font-weight:600">' + esc(d.label) + '</span></td>' +
+      '<td>' + esc(c.patient_name) + '</td>' +
+      '<td>' + esc(c.palika) + '<div style="font-size:11.5px;color:var(--muted-3)">Ward ' + esc(c.ward) + '</div></td>' +
+      '<td>' + esc(fmtDate(c.test_date)) + '</td>' +
+      '<td class="noprint"><div class="btn-row" style="gap:6px">' + pick + '</div></td>' +
+    '</tr>';
+  }).join('');
+
+  return '' +
+  scopeBar() +
+  '<header style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px">' +
+    '<div><h1 class="page">Outcome</h1><div class="page-sub">नतिजा · उपचारको अवस्था</div></div>' +
+    '<div class="btn-row noprint"><button class="btn" data-act="print">Print / PDF</button></div>' +
+  '</header>' +
+
+  '<div class="card" style="overflow:hidden;margin-bottom:18px"><div class="stats">' + cards + '</div></div>' +
+
+  '<section class="card noprint" style="padding:14px 18px;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">' +
+    '<div><div class="lbl">Outcome</div><div class="btn-row">' + filters + '</div></div>' +
+    '<div><div class="lbl">Disease</div><div class="btn-row">' + diseaseFilterRow(S.llDisease, 'll-disease') + '</div></div>' +
+  '</section>' +
+
+  '<div class="tablewrap"><table><thead><tr>' +
+    '<th>Case ID</th><th>Disease</th><th>Patient</th><th>Palika</th><th>Test date</th><th class="noprint">Set outcome</th>' +
+  '</tr></thead><tbody>' +
+    (rows || '<tr><td colspan="6" class="hint" style="padding:18px">No cases match.</td></tr>') +
+  '</tbody></table></div>';
+}
+
+/* --------------------------------------------------------------- actions -- */
+
+/**
+ * Save a CSV. Embedded Apps Script frames sometimes refuse programmatic
+ * downloads, so there is always a copy-and-paste escape hatch — an export that
+ * silently does nothing is worse than an ugly one.
+ */
+function download(filename, text) {
+  try {
+    if (typeof Blob !== 'function' || !window.URL || !URL.createObjectURL) throw new Error('unsupported');
+    var blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    if (a.download === undefined) throw new Error('unsupported');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    toast('Downloaded ' + filename);
+  } catch (e) {
+    showCsvFallback(filename, text);
+  }
+}
+
+function showCsvFallback(filename, text) {
+  var host = qs('#modal-host');
+  if (!host) return;
+  host.innerHTML =
+    '<div class="modal"><div class="panel">' +
+      '<div class="card-head"><div class="t">' + esc(filename) + '</div>' +
+        '<div class="n">Your browser blocked the download</div></div>' +
+      '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-height:0;flex:1">' +
+        '<div class="hint">Select all the text below and copy it into a spreadsheet, ' +
+          'or open the reporting workbook in Google Sheets and export from there.</div>' +
+        '<textarea id="csv-dump" readonly>' + esc(text) + '</textarea>' +
+        '<div class="btn-row">' +
+          '<button class="btn ghost" data-act="csv-copy">Copy to clipboard</button>' +
+          '<button class="btn" data-act="csv-close">Close</button>' +
+        '</div>' +
+      '</div>' +
+    '</div></div>';
+}
+
+function goView(view) {
+  // The two PII screens share one loaded page of results.
+  S.view = view;
+  S.gateError = '';
+  if (view === 'daily' || view === 'cases') S.reportingOpen = true;
+  render();
+  if (view === 'dashboard') loadDashboard();
+  else if (view === 'daily' || view === 'cases') loadPulse();
+  else if (view === 'linelist' || view === 'outcome') { S.list = null; loadList(); }
+}
+
+var listTimer = null;
+function debouncedList() {
+  clearTimeout(listTimer);
+  listTimer = setTimeout(function () { S.llPage = 0; loadList(); }, 350);
+}
+
+/* Click delegation — one listener for the entire application. */
+document.addEventListener('click', function (ev) {
+  var t = ev.target.closest ? ev.target.closest('[data-act]') : null;
+  if (!t) return;
+  var act = t.getAttribute('data-act');
+
+  if (act === 'retry-setup') {
+    ev.preventDefault();
+    S.needsSetup = null;
+    S.boot = null;
+    render();
+    start();
+    return;
+  }
+
+  if (act === 'gate-tab') { S.gateTab = t.getAttribute('data-tab'); S.gateError = ''; render(); return; }
+
+  if (act === 'login-unit') {
+    ev.preventDefault();
+    var p = (qs('#gate-palika') || {}).value || S.palika;
+    var code = (qs('#gate-code') || {}).value || '';
+    rpc('apiLogin', p, code)
+      .then(function (r) {
+        S.unit = { token: r.token, unit_id: r.unit_id, palika: r.palika };
+        S.palika = r.palika; S.scope = 'all'; S.gateError = '';
+        saveSession(); start();
+      })
+      .catch(function (e) { S.gateError = e.message; render(); });
+    return;
+  }
+
+  if (act === 'login-district') {
+    ev.preventDefault();
+    var dcode = (qs('#gate-code') || {}).value || '';
+    rpc('apiLoginDistrict', dcode)
+      .then(function (r) {
+        S.district = { token: r.token };
+        S.gateError = '';
+        saveSession(); start();
+      })
+      .catch(function (e) { S.gateError = e.message; render(); });
+    return;
+  }
+
+  if (act === 'unlock') {
+    ev.preventDefault();
+    var ucode = (qs('#unlock-code') || {}).value || '';
+    rpc('apiLoginDistrict', ucode)
+      .then(function (r) {
+        S.district = { token: r.token };
+        S.gateError = ''; saveSession();
+        S.list = null; loadList();
+        toast('Line list unlocked.');
+      })
+      .catch(function (e) { S.gateError = e.message; render(); });
+    return;
+  }
+
+  if (act === 'csv-close') { qs('#modal-host').innerHTML = ''; return; }
+  if (act === 'csv-copy') {
+    var ta = qs('#csv-dump');
+    if (ta) {
+      ta.select();
+      try { document.execCommand('copy'); toast('Copied.'); }
+      catch (e) { toast('Select the text and copy it manually.', 'err'); }
+    }
+    return;
+  }
+
+  if (act === 'signout') { ev.preventDefault(); signOut(); return; }
+  if (act === 'nav') { goView(t.getAttribute('data-view')); return; }
+  if (act === 'toggle-reporting') { S.reportingOpen = !S.reportingOpen; render(); return; }
+  if (act === 'clear-scope') { S.scope = 'all'; refreshForScope(); return; }
+  if (act === 'range') { S.dashRange = t.getAttribute('data-range'); loadDashboard(); return; }
+  if (act === 'print') { window.print(); return; }
+
+  if (act === 'copy-missing') {
+    var missing = (S.dash && S.dash.completeness.notReported) || [];
+    var text = missing.length ? missing.join('\n') : 'All palikas have reported today.';
+    try {
+      navigator.clipboard.writeText(text);
+      toast(missing.length ? 'Copied ' + missing.length + ' palika name(s).' : 'All palikas have reported.');
+    } catch (e) { toast(text); }
+    return;
+  }
+
+  if (act === 'export') {
+    var what = t.getAttribute('data-what');
+    var tok = (what === 'linelist') ? districtToken() : activeToken();
+    rpc('apiExport', tok, what, { scope: S.scope, range: S.dashRange, disease: S.llDisease })
+      .then(function (r) { download(r.filename, r.csv); })
+      .catch(function (e) { toast(e.message, 'err'); });
+    return;
+  }
+
+  if (act === 'save-pulse') { savePulse(); return; }
+  if (act === 'save-case') { saveCase(); return; }
+  if (act === 'case-disease') {
+    S.caseDisease = t.getAttribute('data-disease');
+    S.caseForm.test_type = '';
+    render();
+    return;
+  }
+  if (act === 'cancel-edit') {
+    S.editingId = null; S.caseErrors = {}; S.caseForm = emptyCase(S.reportDate);
+    render();
+    return;
+  }
+
+  if (act === 'edit-case') {
+    var id = t.getAttribute('data-id');
+    var row = null;
+    (S.list ? S.list.rows : []).forEach(function (c) { if (c.case_id === id) row = c; });
+    if (!row) return;
+    S.editingId = row.case_id;
+    S.caseDisease = row.disease;
+    S.palika = row.palika;
+    S.reportDate = row.test_date;
+    S.caseForm = {
+      patient_name: row.patient_name, age: String(row.age), age_unit: row.age_unit,
+      sex: row.sex, ward: String(row.ward), tole: row.tole,
+      test_type: row.test_type, test_date: row.test_date
+    };
+    S.caseErrors = {};
+    goView('cases');
+    return;
+  }
+
+  if (act === 'delete-case') {
+    var did = t.getAttribute('data-id');
+    if (S.confirmDelete !== did) { S.confirmDelete = did; render(); return; }
+    S.confirmDelete = null;
+    rpc('apiDeleteCase', districtToken() || writeToken(), did)
+      .then(function (r) { toast(r.message); return loadList().then(loadDashboard); })
+      .catch(function (e) { toast(e.message, 'err'); });
+    return;
+  }
+
+  if (act === 'set-outcome') {
+    rpc('apiSetOutcome', districtToken(), t.getAttribute('data-id'), t.getAttribute('data-outcome'))
+      .then(function () { return loadList(); })
+      .catch(function (e) { toast(e.message, 'err'); });
+    return;
+  }
+
+  if (act === 'll-disease') { S.llDisease = t.getAttribute('data-value'); S.llPage = 0; loadList(); return; }
+  if (act === 'outcome-filter') { S.outcomeFilter = t.getAttribute('data-value'); S.llPage = 0; loadList(); return; }
+  if (act === 'll-reset') {
+    S.llDisease = 'all'; S.llFrom = ''; S.llTo = ''; S.llQuery = ''; S.llPage = 0;
+    loadList();
+    return;
+  }
+  if (act === 'll-page') {
+    S.llPage = Math.max(0, S.llPage + parseInt(t.getAttribute('data-delta'), 10));
+    loadList();
+    return;
+  }
+});
+
+function refreshForScope() {
+  if (S.view === 'dashboard') loadDashboard();
+  else if (S.view === 'linelist' || S.view === 'outcome') { S.llPage = 0; loadList(); }
+  else render();
+}
+
+/* Input delegation. 'input' updates state silently; 'change' triggers reloads. */
+document.addEventListener('input', function (ev) {
+  var el = ev.target;
+  var field = el.getAttribute && el.getAttribute('data-field');
+  if (!field) return;
+
+  if (field === 'daily') {
+    S.draft[el.getAttribute('data-name')] = el.value;
+    var note = qs('[data-note="pulse"]');
+    if (note) delete note.dataset.sticky;
+    patchDaily();
+    return;
+  }
+  if (field === 'case') {
+    S.caseForm[el.getAttribute('data-name')] = el.value;
+    return;
+  }
+  if (field === 'll-query') { S.llQuery = el.value; debouncedList(); return; }
+  if (field === 'gate-code' || field === 'unlock-code') { S.gateError = ''; return; }
+});
+
+document.addEventListener('change', function (ev) {
+  var el = ev.target;
+  var field = el.getAttribute && el.getAttribute('data-field');
+  if (!field) return;
+
+  // Keep the sign-in choice in state, otherwise a failed attempt re-renders the
+  // form and silently resets the palika the reporter had picked.
+  if (field === 'gate-palika') { S.palika = el.value; return; }
+  // Ticking "nothing to report" greys out the count boxes, so this one needs a
+  // full re-render rather than the cheap derived-value patch.
+  if (field === 'nil-report') { S.draft.nil_report = el.checked ? '1' : '0'; render(); return; }
+  if (field === 'scope') { S.scope = el.value; refreshForScope(); return; }
+  if (field === 'work-palika') { S.palika = el.value; loadPulse(); return; }
+  if (field === 'report-date') {
+    S.reportDate = el.value;
+    S.caseForm.test_date = el.value;
+    loadPulse();
+    return;
+  }
+  if (field === 'll-from') { S.llFrom = el.value; S.llPage = 0; loadList(); return; }
+  if (field === 'll-to') { S.llTo = el.value; S.llPage = 0; loadList(); return; }
+  if (field === 'case' && el.getAttribute('data-name') === 'test_date') {
+    S.caseForm.test_date = el.value;
+    render();
+    return;
+  }
+});
+
+/* Enter submits the credential forms. */
+document.addEventListener('keydown', function (ev) {
+  if (ev.key !== 'Enter') return;
+  var el = ev.target;
+  var field = el.getAttribute && el.getAttribute('data-field');
+  if (field === 'gate-code') {
+    ev.preventDefault();
+    var btn = qs('[data-act="login-unit"]') || qs('[data-act="login-district"]');
+    if (btn) btn.click();
+  } else if (field === 'unlock-code') {
+    ev.preventDefault();
+    var ub = qs('[data-act="unlock"]');
+    if (ub) ub.click();
+  }
+});
+
+start();
+
+})();
+</script>

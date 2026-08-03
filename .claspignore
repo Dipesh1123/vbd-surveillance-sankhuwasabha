@@ -1,0 +1,7 @@
+# Only apps-script/ is pushed (see rootDir in .clasp.json), but be explicit —
+# a stray push of the test suite or the docs into the Apps Script project would
+# be confusing at best.
+**/**
+!appsscript.json
+!*.gs
+!*.html
