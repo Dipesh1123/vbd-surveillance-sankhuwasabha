@@ -32,7 +32,11 @@ const HOST_ELEMENTS = ["id=\"root\"", "id=\"toast-host\"", "id=\"modal-host\""];
 
 const OUTPUTS = [
   { from: "public/app.js", to: "apps-script/App.html", tag: "script" },
-  { from: "public/styles.css", to: "apps-script/Styles.html", tag: "style" }
+  { from: "public/styles.css", to: "apps-script/Styles.html", tag: "style" },
+  /* logo.css is itself generated, by scripts/make-logo.py. It is kept separate
+     from styles.css so that a 10 KB base64 blob does not sit in the middle of a
+     stylesheet people actually edit. */
+  { from: "public/logo.css", to: "apps-script/Logo.html", tag: "style" }
 ];
 
 function read(rel) {

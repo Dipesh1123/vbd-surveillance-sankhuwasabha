@@ -28,9 +28,10 @@ function startApp(dir, server, opts) {
   const o = opts || {};
   const include = n => fs.readFileSync(path.join(dir, n + ".html"), "utf8");
 
+  // Resolve every include() the same way HtmlService would, whatever it names,
+  // so adding a partial to Index.html does not silently skip the harness.
   let html = fs.readFileSync(path.join(dir, "Index.html"), "utf8")
-    .replace(/<\?!=\s*include\('Styles'\);\s*\?>/, include("Styles"))
-    .replace(/<\?!=\s*include\('App'\);\s*\?>/, include("App"))
+    .replace(/<\?!=\s*include\('([A-Za-z0-9_]+)'\);\s*\?>/g, (_, name) => include(name))
     .replace(/<\?!=\s*JSON\.stringify\(buildStamp\)\s*\?>/, JSON.stringify("test-build"));
 
   if (/<\?/.test(html)) {
@@ -133,12 +134,13 @@ function startWebApp(server, opts) {
   // jsdom's "outside-only" mode never fetches src=, so inline what the browser
   // would have loaded, in the same order.
   let html = readPub("index.html")
-    .replace(/<link rel="stylesheet" href="styles\.css">/,
-      () => "<style>\n" + readPub("styles.css") + "\n</style>")
-    .replace(/<script src="([^"]+)"><\/script>/g,
+    // Local stylesheets and scripts only — the Google Fonts <link> stays a link.
+    .replace(/<link rel="stylesheet" href="(?!https?:)([^"]+)">/g,
+      (_, href) => "<style>\n" + readPub(href) + "\n</style>")
+    .replace(/<script src="(?!https?:)([^"]+)"><\/script>/g,
       (_, src) => "<script>\n" + readPub(src) + "\n</script>");
 
-  if (/<script src=|href="styles\.css"/.test(html)) {
+  if (/<script src="(?!https?:)|<link rel="stylesheet" href="(?!https?:)/.test(html)) {
     throw new Error("a local asset in public/index.html was not inlined by the harness");
   }
 

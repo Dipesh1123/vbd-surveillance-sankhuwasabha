@@ -31,7 +31,7 @@ nothing if the hosted site is unreachable.
 
 ```bash
 npm install
-npm test        # 381 checks — see the list below
+npm test        # 389 checks — see the list below
 ```
 
 Deploying from the command line with `clasp` is supported — see
@@ -53,6 +53,7 @@ public/                 the site Vercel serves — EDIT THIS
   config.js             where the browser sends API calls
   app.js                the client application
   styles.css            design tokens and layout
+  logo.css              GENERATED — the emblem, resized and inlined
 
 api/                    Vercel serverless functions
   _upstream.js          which Apps Script deployment to talk to
@@ -69,6 +70,7 @@ apps-script/            pushed by clasp
   Code.gs               doGet, the daily digest trigger
   Index.html            page shell for the direct /exec fallback
   Styles.html           GENERATED from public/styles.css
+  Logo.html             GENERATED from public/logo.css
   App.html              GENERATED from public/app.js
   appsscript.json       manifest and OAuth scopes
 
@@ -77,15 +79,16 @@ test/                   runs on Node, not in Google
   harness.js            shared jsdom wiring for both transports
   backend.test.js       69 logic tests
   edge.test.js          65 data-integrity edge cases
-  frontend.test.js      98 UI tests in jsdom against the real backend
+  frontend.test.js      100 UI tests in jsdom against the real backend
   setup.test.js         17 tests: first-run state before the database exists
-  transport.test.js     69 tests: the hosted path — the client over JSON/HTTP
+  transport.test.js     75 tests: the hosted path — the client over JSON/HTTP
   proxy.test.js         63 tests: the Vercel function, redirects and failures
   syntax.check.js       parses every .gs and inline script
   contract.check.js     client calls vs server functions vs the RPC allowlist
 
 scripts/
   build-gas-html.js     regenerates the Apps Script HTML from public/
+  make-logo.py          resizes uploads/logo.png into public/logo.css
   clasp-create.js       creates the Sheet + script without losing our manifest
   clasp-redeploy.js     updates the existing web app instead of minting a new URL
 
