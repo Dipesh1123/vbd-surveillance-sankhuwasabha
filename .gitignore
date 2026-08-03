@@ -1,0 +1,7 @@
+node_modules/
+package-lock.json
+# Holds the script and spreadsheet ids for one particular installation.
+# See .clasp.json.example.
+.clasp.json
+.vercel/
+*.log

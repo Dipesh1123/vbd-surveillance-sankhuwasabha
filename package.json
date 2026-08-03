@@ -1,0 +1,34 @@
+{
+  "name": "vbd-surveillance-sankhuwasabha",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily dengue and scrub typhus reporting for Health Office Sankhuwasabha — Google Apps Script web app over a Google Sheets database.",
+  "scripts": {
+    "test": "npm run build && npm run check:syntax && npm run check:contract && npm run test:backend && npm run test:edge && npm run test:frontend && npm run test:session && npm run test:setup && npm run test:transport && npm run test:proxy",
+    "build": "node scripts/build-gas-html.js",
+    "check:build": "node scripts/build-gas-html.js --check",
+    "check:syntax": "node test/syntax.check.js apps-script",
+    "check:contract": "node test/contract.check.js apps-script",
+    "test:backend": "node test/backend.test.js apps-script",
+    "test:edge": "node test/edge.test.js apps-script",
+    "test:frontend": "node test/frontend.test.js apps-script",
+    "test:session": "node test/session.test.js apps-script",
+    "test:setup": "node test/setup.test.js apps-script",
+    "test:transport": "node test/transport.test.js apps-script",
+    "test:proxy": "node test/proxy.test.js",
+
+    "clasp:login": "clasp login",
+    "clasp:whoami": "clasp show-authorized-user",
+    "clasp:create": "node scripts/clasp-create.js",
+    "clasp:status": "clasp show-file-status",
+    "clasp:push": "npm test && clasp push -f",
+    "clasp:deploy": "npm test && clasp push -f && clasp create-deployment --description \"web app\"",
+    "clasp:redeploy": "npm test && clasp push -f && node scripts/clasp-redeploy.js",
+    "clasp:deployments": "clasp list-deployments",
+    "clasp:open": "clasp open-script",
+    "clasp:open-sheet": "clasp open-container"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

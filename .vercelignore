@@ -1,0 +1,15 @@
+# Vercel serves public/ and runs api/. Nothing else needs to be uploaded, and
+# keeping the rest out means a misconfiguration can never expose the backend
+# source or the test fixtures over HTTP.
+apps-script/
+test/
+scripts/
+docs/
+node_modules/
+uploads/
+support.js
+Dengue Scrub Reporting.dc.html
+.clasp.json
+.clasp.json.example
+.claspignore
+*.log

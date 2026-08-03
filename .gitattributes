@@ -1,0 +1,5 @@
+# Authored on Windows, deployed to Linux (Vercel) and to Apps Script. Normalise
+# to LF in the repository so the generated Apps Script HTML compares equal to
+# its source no matter which machine ran `npm run build`.
+* text=auto eol=lf
+*.png binary
