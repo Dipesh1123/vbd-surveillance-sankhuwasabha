@@ -6,7 +6,7 @@ For the district surveillance officer who owns this system day to day.
 
 ## Daily — around 5 PM
 
-1. Open the web app, sign in with the **district** code.
+1. Open the web app — it opens straight onto the dashboard, no sign-in.
 2. **Dashboard ▸ Reporting completeness · today.**
 3. Press **Copy the list to call** and telephone the palikas listed under
    *Not yet reported*.
@@ -33,9 +33,9 @@ exists and is not counted, or is counted and does not exist.
 
 ## Monthly
 
-- Skim the **Audit** tab for `login_failed` and `login_blocked` clusters — a run
-  of failures against one palika means either a forgotten code or someone
-  guessing.
+- Skim the **Audit** tab for edits and deletions you cannot account for. With no
+  sign-in there is nothing to correlate them against, so an unexplained change
+  is worth a phone call rather than a shrug.
 - Check `Units.focal_person` and `phone` are current. Staff rotate.
 - Export the line list and store a copy somewhere you control. Google is not a
   backup strategy you own.
@@ -46,7 +46,7 @@ exists and is not counted, or is counted and does not exist.
 2. **Extend the Nepali calendar** — see below.
 3. Consider archiving: copy the workbook, then delete rows older than two years
    from the working copy. Past roughly 20,000 rows the app gets noticeably slow.
-4. Reissue all access codes if staff have changed.
+4. Confirm the URL has not spread beyond current staff. It is the only control.
 
 ---
 
@@ -78,23 +78,30 @@ Doing a whole year at a time (12 rows) is a 10-minute job once a year.
 
 ---
 
-## Access code management
+## Access — the URL is the whole of it
 
-**Issue codes to everyone** — *VBD Surveillance ▸ Issue access codes for all
-palikas*. Replaces every code at once. Use at the start of a fiscal year or
-after a security concern.
+There are no access codes. There is no sign-in. Whoever opens the link can read
+every patient name and can add, edit or delete any case in any palika.
 
-**Reset one palika** — *Reset one palika access code…*. Use when a focal person
-leaves or forgets their code.
+That means the URL is the only thing standing between the line list and the
+public, so treat it the way you would have treated a password:
 
-**Reset the district code** — *Reset district (line-list) access code…*. This
-one unlocks patient names. Rotate it whenever someone with access leaves.
+- Send it to focal persons individually, not to a group that outlives its
+  members.
+- Keep it out of printed material, notice boards and public documents.
+- When a focal person leaves, there is **nothing to revoke**. If you need to cut
+  someone off, the only lever is to publish a new deployment, which changes the
+  URL, and redistribute it — see `HOSTING.md ▸ Deploying a change to the
+  backend`.
 
-Codes are shown **once**, in a dialog. They are stored only as a salted hash and
-cannot be recovered. Write them down when they appear.
+**If patient confidentiality becomes a concern**, the fastest mitigation that
+does not require re-adding logins is to stop the app showing names: the
+spreadsheet keeps them, and the district reads them there, protected by the
+Google account that owns the file.
 
-A palika is locked out for 15 minutes after 8 wrong attempts. To clear a lockout
-immediately, reissue that palika's code.
+Because there is no identity, the **Audit tab records what changed but not who
+changed it** — every row is attributed to `open`. Use it for "when did this
+number change", never for "who did this".
 
 ---
 
@@ -116,21 +123,26 @@ The system is built around the fields that drive action:
 
 ## When something goes wrong
 
-**A palika cannot sign in** — confirm they are selecting the right palika, then
-check `Units.active` is `TRUE` and `code_hash` is not blank. Reissue if unsure.
+**A palika cannot get in** — there is nothing to sign into, so this is either
+the wrong URL or no connection. Send them the link again and have them open
+`/api/health` in the browser; if that returns JSON, the site is up.
+
+**A palika is missing from the dropdown** — check `Units.active` is `TRUE` for
+that row, then reload.
 
 **Someone reports a wrong number** — they resubmit the same date. It overwrites.
 No amendment workflow exists by design; correcting and resending is what field
 staff actually do.
 
-**A case was entered against the wrong palika, date or disease** — a district
-session can edit it directly. The move is only accepted if the destination day
+**A case was entered against the wrong palika, date or disease** — anyone may
+edit it directly. The move is only accepted if the destination day
 has already declared a positive with room for it, so raise that palika's count
 on Daily numbers first. Afterwards the **origin** day is over-declared by one —
 the confirmation message says so, and the weekly check lists it until you
 correct that return too.
 
-A unit session cannot move a case out of its own palika; ask the district.
+Anyone can move a case between palikas; the only check is that the destination
+day has declared room for it.
 
 **The date is closed for editing** — returns older than `allow_backdate_days`
 (default 7) are locked. Raise the value in `Config` temporarily, let them
@@ -138,7 +150,8 @@ submit, then put it back.
 
 **You need to recover something** — the spreadsheet has full version history:
 **File ▸ Version history ▸ See version history**. Combined with the `Audit` tab
-you can reconstruct who changed what and when.
+you can reconstruct what changed and when. Not *who* — there is no identity to
+record.
 
 ---
 
@@ -151,11 +164,12 @@ npm install     # once
 npm test
 ```
 
-This runs seven suites — **279 checks**: syntax parsing, client/server contract
-consistency, 67 backend logic tests, 65 data-integrity edge cases, 96 frontend
-tests that drive the real UI in a headless DOM against the real backend, 35
-covering page reload and the district role, and 16 covering what a reporter or
-admin sees before the database has been provisioned at all.
+This runs six suites — **381 checks**: syntax parsing, client/server contract
+consistency, 69 backend logic tests, 65 data-integrity edge cases, 98 frontend
+tests that drive the real UI in a headless DOM against the real backend, 17
+covering what a reporter or admin sees before the database has been provisioned
+at all, 69 covering the hosted path over JSON/HTTP, and 63 covering the Vercel
+proxy.
 
 They cannot catch everything — they do not run inside Google's actual runtime —
 but a failure here is always a real problem.

@@ -13,7 +13,7 @@ line list.
 |---|---|
 | A Google account for the health office | Owns the spreadsheet and runs the web app |
 | The 10 palika names confirmed | Seeded in `Schema.gs` — edit before first run if a name has changed |
-| A phone list of focal persons | You will read access codes out to them |
+| A phone list of focal persons | You will send the URL to each of them |
 
 > **Data governance note.** Patient names will be stored on Google servers
 > outside Nepal. Confirm this is acceptable under your office's data policy
@@ -44,8 +44,8 @@ line list.
    | Script file `Util` | `apps-script/Util.gs` |
    | Script file `Repo` | `apps-script/Repo.gs` |
    | Script file `Setup` | `apps-script/Setup.gs` |
-   | Script file `Auth` | `apps-script/Auth.gs` |
    | Script file `Api` | `apps-script/Api.gs` |
+   | Script file `Rpc` | `apps-script/Rpc.gs` |
    | Script file `Code` | `apps-script/Code.gs` |
    | HTML file `Index` | `apps-script/Index.html` |
    | HTML file `Styles` | `apps-script/Styles.html` |
@@ -99,22 +99,18 @@ Open the **Config** tab and edit the `value` column:
 | `fiscal_year` | e.g. `२०८२/८३` |
 | `notice_text` | The red banner every reporter sees. Change it during an outbreak. |
 | `allow_backdate_days` | How many days back a palika may still edit. Default `7`. |
-| `session_hours` | How long a sign-in lasts. Default `10`. |
 | `logo_url` | Optional. A public image URL for the emblem; blank uses a built-in mark. |
 | `digest_email` | Optional. Gets the 5 PM "who has not reported" email. |
 
-Do **not** hand-edit `district_code_hash` or `district_code_salt` — the menu
-manages those.
+## Step 5 — There are no access codes
 
-## Step 5 — Issue access codes
+Nothing to do here. This system has **no authentication**: no palika codes, no
+district code, no sessions. Anyone with the URL can read every patient name and
+can add, edit or delete any case.
 
-1. **VBD Surveillance ▸ Issue access codes for all palikas**.
-2. A dialog lists every palika and its 6-character code.
-   **Copy this list now.** Codes are stored only as a one-way hash, so nobody —
-   including you — can look them up later. If you lose one, reissue it.
-3. **VBD Surveillance ▸ Reset district (line-list) access code**. Leave the box
-   blank to have one generated. This code unlocks **patient names**; give it
-   only to district surveillance staff.
+That is a deliberate choice — see `README.md ▸ Access model`. The consequence
+for deployment is simply that **the URL is the credential**. Hand it out the way
+you would have handed out a password, and do not put it anywhere public.
 
 ## Step 6 — Publish the web app
 
@@ -126,12 +122,12 @@ manages those.
    - **Who has access**: **Anyone**
 4. **Deploy**, then copy the **Web app URL**.
 
-> **"Anyone" does not mean unprotected.** It means a visitor does not need a
-> Google account — necessary because focal persons often have none. The app
-> shows nothing but a sign-in box until a valid access code is entered. It must
-> be set this way for palika staff to reach it at all.
+> **"Anyone" here means exactly what it says.** A visitor needs no Google
+> account — necessary because focal persons often have none — and with
+> authentication removed there is no second gate behind it either. Anyone who
+> reaches this URL is in.
 
-Test the URL yourself, then send it to the focal persons with their codes.
+Test the URL yourself, then send it to the focal persons individually.
 `VBD Surveillance ▸ Show web app URL` will print it again later.
 
 ## Step 7 — Optional: the 5 PM reminder
@@ -159,17 +155,17 @@ That is the single most common mistake with Apps Script.
 
 Run through this before announcing the system:
 
-- [ ] Open the web app URL in a private window — a sign-in box appears
-- [ ] A wrong code is refused and says how many attempts remain
-- [ ] A correct palika code signs in and shows the dashboard
+- [ ] Open the web app URL in a private window — the dashboard appears with no
+      sign-in of any kind
+- [ ] The sidebar **Reporting for** selector lists all 10 palikas
+- [ ] Picking a palika, closing the browser and reopening returns to the same one
 - [ ] Daily numbers: entering 6 NS1 + 2 IgM shows **Total tests 8**
 - [ ] Entering 9 positives against 8 tests blocks the submit button
 - [ ] Submitting writes a row to the **Pulses** tab
 - [ ] Positive cases refuses a third case when only 2 were declared
-- [ ] Line list shows the padlock until the district code is entered
-- [ ] With the district code, patient names appear
-- [ ] A second palika's code cannot see the first palika's cases
-- [ ] The **Audit** tab has a row for each of the above
+- [ ] Line list opens directly and shows full patient names, unmasked
+- [ ] The line list CSV export downloads and contains names
+- [ ] The **Audit** tab has a row for each of the above, all with role `open`
 
 ---
 
@@ -188,8 +184,6 @@ now shows a plain-language "not ready yet" message instead of this error.
 
 **Reporters see a stale version** — you saved but did not deploy a new version.
 
-**"Too many wrong codes"** — the lockout is 15 minutes. To clear it now, reissue
-that palika's code.
 
 **Everything is slow** — check how many rows are in `Cases` and `Pulses`. Past
 roughly 20,000 rows, archive completed fiscal years to a separate workbook.
@@ -211,7 +205,7 @@ above, but be clear about the boundary before you start.
 | Create the spreadsheet + bound script | **yes** — `clasp create --type sheets` |
 | Upload all 11 files | **yes** — `clasp push` |
 | Publish the web app with the right access settings | **yes** — `clasp deploy` reads them from `appsscript.json` |
-| Build the database and issue codes | **yes, via `provisionEverything()`** — but something has to invoke it |
+| Build the database | **yes, via `provisionEverything()`** — but something has to invoke it |
 | **Grant the OAuth consent** | **no. Never.** |
 | Fill in the Config tab | no — it is your district's content |
 
@@ -257,10 +251,8 @@ In the editor that just opened:
    > error, you ran the wrong one — run `provisionEverything` instead.
 2. Authorise when prompted (**Advanced ▸ Go to … (unsafe) ▸ Allow**).
 3. Press **Run** again if the prompt interrupted it.
-4. Open **Execution log**. It prints every palika code and the district code.
-   **Copy them now** — they are stored only as hashes and are never shown again.
-   Then clear the log, because it is sitting in a browser tab containing live
-   credentials.
+4. Open **Execution log**. It prints the web app URL if one has been deployed.
+   No codes are issued — there are none.
 
 Then publish and finish:
 
@@ -277,12 +269,10 @@ It is the headless equivalent of walking the menu — safe to re-run, and it nev
 destroys data:
 
 - `setupDatabase()` — creates any missing sheet or column
-- `issueAllCodes()` — a fresh code for every palika, printed to the log
-- `setDistrictCode('')` — generates the line-list code, printed to the log
 - prints the web app URL if one has been deployed
 
-Because it reissues **every** code, only run it again if you actually intend to
-lock out everyone holding an old one.
+It used to issue access codes as well. It no longer does, because there are
+none, which also means it is now safe to re-run at any time.
 
 ### Updating afterwards — use redeploy, not deploy
 

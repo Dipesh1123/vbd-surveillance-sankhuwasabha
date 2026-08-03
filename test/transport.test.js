@@ -19,18 +19,6 @@ const dir = process.argv[2] || "apps-script";
 const { check, finish } = makeChecker();
 
 const server = startServer(dir, globals);
-server.run(`
-  ['U03','U05'].forEach(function (id) {
-    var u = findByKey('Units','unit_id',id);
-    var salt = randomToken(16);
-    updateRowAt('Units', u._row, Object.assign({}, u, {
-      code_hash: hashCode('TESTME', salt), code_salt: salt }));
-  });
-  var ds = randomToken(16);
-  configSet('district_code_salt', ds);
-  configSet('district_code_hash', hashCode('DISTRICT99', ds));
-  resetCaches();
-`);
 
 /** Post a raw body straight at the dispatcher, bypassing the client. */
 function post(body) {
@@ -102,21 +90,20 @@ function callFn(fn, args) {
     server.ctx);
   check("removing it restores normal access", callFn("apiBootstrap", [""]).ok === true);
 
-  console.log("\n--- 5. A real session works over HTTP, start to finish ---");
-  const login = callFn("apiLogin", ["Khandbari Municipality", "TESTME"]);
-  check("login succeeds", login.ok === true, login.error);
-  const token = login.ok && login.data.token;
-  check("a token comes back", !!token);
-  check("bootstrap with that token reports a session",
-    callFn("apiBootstrap", [token]).data.session !== null);
-  check("a wrong code is still refused over HTTP",
-    callFn("apiLogin", ["Madi Municipality", "NOPE12"]).ok === false);
-  check("the dashboard is reachable", callFn("apiDashboard", [token, "30", "all"]).ok === true);
-  check("logout is accepted", callFn("apiLogout", [token]).ok === true);
-  check("the token is dead afterwards",
-    callFn("apiDashboard", [token, "30", "all"]).code === "SESSION_EXPIRED");
+  console.log("\n--- 5. Every handler answers over HTTP with no credential ---");
+  check("bootstrap works unauthenticated", callFn("apiBootstrap").ok === true);
+  check("the dashboard is reachable", callFn("apiDashboard", ["30", "all"]).ok === true);
+  check("the line list is reachable", callFn("apiListCases", [{}]).ok === true);
+  check("the data quality report is reachable", callFn("apiDataQuality").ok === true);
+  /* The line list export carries patient names and is served to anyone. This is
+     the sharpest edge of the open design, so it is asserted rather than assumed. */
+  const openExport = callFn("apiExport", ["linelist", {}]);
+  check("the line-list export is served to anyone", openExport.ok === true, openExport);
+  check("login handlers are not reachable at all",
+    callFn("apiLogin", ["Khandbari Municipality", "TESTME"]).code === "NO_SUCH_METHOD");
+  check("nor is logout", callFn("apiLogout", [""]).code === "NO_SUCH_METHOD");
 
-  console.log("\n--- 6. The static page boots and signs in over fetch() ---");
+  console.log("\n--- 6. The static page boots straight into the app over fetch() ---");
   const app = startWebApp(server, {});
   await app.settle(60);
   check("no uncaught errors reaching the DOM", app.errors.length === 0, app.errors.join(" | "));
@@ -130,30 +117,30 @@ function callFn(fn, args) {
     /^text\/plain/.test((app.requests[0].headers || {})["Content-Type"] || ""),
     (app.requests[0].headers || {})["Content-Type"]);
   check("it bootstrapped", app.calledFns()[0] === "apiBootstrap", app.calledFns());
-  check("the sign-in gate rendered", !!app.$("#gate-palika"));
-  check("all 10 palikas are listed", app.$("#gate-palika").options.length === 10);
-
-  app.setInput("#gate-palika", "Khandbari Municipality");
-  app.setInput("#gate-code", "TESTME");
-  app.click('[data-act="login-unit"]');
-  await app.settle(60);
-  check("signing in over HTTP works", !app.$("#gate-palika"), app.text().slice(0, 160));
-  check("the palika name is on screen", /Khandbari/.test(app.text()), app.text().slice(0, 160));
-  check("apiLogin went over the wire", app.calledFns().indexOf("apiLogin") >= 0, app.calledFns());
-  check("the dashboard loaded straight after", app.calledFns().indexOf("apiDashboard") >= 0,
+  check("no sign-in gate rendered", !app.$("#gate-palika") && !app.$(".gate"));
+  check("the app shell rendered instead", !!app.$(".masthead"), app.text().slice(0, 160));
+  check("the palika selector lists all 10",
+    !!app.$("#side-palika") && app.$("#side-palika").options.length === 10,
+    app.$("#side-palika") && app.$("#side-palika").options.length);
+  check("no login went over the wire",
+    app.calledFns().indexOf("apiLogin") < 0, app.calledFns());
+  check("the dashboard loaded straight away", app.calledFns().indexOf("apiDashboard") >= 0,
     app.calledFns());
 
-  console.log("\n--- 7. A wrong code over HTTP fails the same way it does on Apps Script ---");
-  const app2 = startWebApp(server, {});
+  console.log("\n--- 7. The palika choice persists across a page load ---");
+  app.setInput("#side-palika", "Panchkhapan Municipality");
+  await app.settle(60);
+  check("the selection took effect", /Panchkhapan/.test(app.text()), app.text().slice(0, 200));
+  check("it was written to localStorage",
+    app.win.localStorage.getItem("vbd.palika.v1") === "Panchkhapan Municipality",
+    app.win.localStorage.getItem("vbd.palika.v1"));
+
+  const app2 = startWebApp(server, { palika: "Panchkhapan Municipality" });
   await app2.settle(60);
-  app2.setInput("#gate-palika", "Panchkhapan Municipality");
-  app2.setInput("#gate-code", "WRONGX");
-  app2.click('[data-act="login-unit"]');
-  await app2.settle(60);
-  check("still on the gate", !!app2.$("#gate-palika"));
-  check("the message says the code is wrong", /not correct/i.test(app2.text()),
-    app2.text().slice(0, 200));
-  check("the palika choice survived", app2.$("#gate-palika").value === "Panchkhapan Municipality");
+  check("a fresh load comes back to the same palika",
+    app2.$("#side-palika") && app2.$("#side-palika").value === "Panchkhapan Municipality",
+    app2.$("#side-palika") && app2.$("#side-palika").value);
+  check("and it still needed no credential", app2.calledFns().indexOf("apiLogin") < 0);
 
   console.log("\n--- 8. Network failure is reported in plain language ---");
   const app3 = startWebApp(server, { offline: true });

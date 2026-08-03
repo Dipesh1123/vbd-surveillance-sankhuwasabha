@@ -5,7 +5,7 @@ const vm = require("vm");
 const { globals, cacheControl, counters } = require("./gasmock");
 
 const dir = process.argv[2];
-const order = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Auth.gs", "Api.gs", "Code.gs"];
+const order = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Api.gs", "Rpc.gs", "Code.gs"];
 
 const ctx = vm.createContext(Object.assign({}, globals));
 for (const f of order) {
@@ -34,37 +34,39 @@ run("setupDatabase()");
 check("still 10 palikas after re-run", run("units().length") === 10, run("units().length"));
 check("Pulses still empty", run("readAll('Pulses').length") === 0);
 
-console.log("\n--- 3. Issue a code and log in ---");
-run(`
-  var u = findByKey('Units','unit_id','U03');
-  var salt = randomToken(16);
-  updateRowAt('Units', u._row, Object.assign({}, u, { code_hash: hashCode('TESTME', salt), code_salt: salt }));
-  resetCaches();
-`);
-const badLogin = run("apiLogin('Khandbari Municipality','WRONG')");
-check("wrong code rejected", badLogin.ok === false, badLogin);
-const login = run("apiLogin('Khandbari Municipality','TESTME')");
-check("correct code accepted", login.ok === true, login);
-check("session carries the palika", login.ok && login.data.palika === "Khandbari Municipality");
-run(`var TOK = ${JSON.stringify(login.data.token)};`);
+console.log("\n--- 3. There is no authentication to get past ---");
+/* The system was deliberately opened up: no codes, no sessions, no roles. These
+   assert that the machinery is really gone rather than merely bypassed, because
+   a half-removed permission check is worse than none — it reads as protection
+   that is not there. */
+check("no login handler exists", run("typeof apiLogin") === "undefined");
+check("no district login handler exists", run("typeof apiLoginDistrict") === "undefined");
+check("no logout handler exists", run("typeof apiLogout") === "undefined");
+check("no session resolver exists", run("typeof requireSession") === "undefined");
+check("no district gate exists", run("typeof requireDistrict") === "undefined");
+check("Units carries no code columns",
+  run("SCHEMA.Units.columns.filter(function(c){return /code_/.test(c.name);}).length") === 0);
+check("Config seeds no district code",
+  run("SEED_CONFIG.filter(function(r){return /district_code/.test(r[0]);}).length") === 0);
 
 console.log("\n--- 4. Bootstrap ---");
-const boot = run("apiBootstrap(TOK)");
+const boot = run("apiBootstrap()");
 check("bootstrap ok", boot.ok === true, boot);
-check("bootstrap has session", boot.ok && boot.data.session && boot.data.session.role === "unit");
+check("bootstrap reports no session at all", boot.ok && boot.data.session === undefined, boot.data);
+check("bootstrap still lists every palika", boot.ok && boot.data.units.length === 10);
 check("BS date renders in Devanagari", boot.ok && /[ऀ-ॿ]/.test(boot.data.todayBs), boot.ok && boot.data.todayBs);
 
 const today = run("todayIso()");
 run(`var TODAY = ${JSON.stringify(today)};`);
 
 console.log("\n--- 5. Reconciliation: positives cannot exceed tests ---");
-const over = run(`apiSavePulse(TOK, { palika:'Khandbari Municipality', report_date:TODAY,
+const over = run(`apiSavePulse({ palika:'Khandbari Municipality', report_date:TODAY,
   dengue_ns1:2, dengue_suspects:5, dengue_positives:9 })`);
 check("save refused", over.ok && over.data.saved === false, over);
 check("error names the rule", over.ok && /cannot exceed tests/.test(over.data.message), over.ok && over.data.message);
 
 console.log("\n--- 6. Valid daily return ---");
-const good = run(`apiSavePulse(TOK, { palika:'Khandbari Municipality', report_date:TODAY,
+const good = run(`apiSavePulse({ palika:'Khandbari Municipality', report_date:TODAY,
   dengue_suspects:12, dengue_ns1:6, dengue_igm:2, dengue_positives:2,
   scrub_suspects:4, scrub_rdt:3, scrub_positives:1, remarks:'RDT stock low' })`);
 check("saved", good.ok && good.data.saved === true, good);
@@ -75,7 +77,7 @@ check("warns that cases are still owed",
 check("one Pulses row written", run("readAll('Pulses').length") === 1);
 
 console.log("\n--- 7. Line-list quota enforcement ---");
-const mkCase = (name, disease, tt) => run(`apiSaveCase(TOK, { palika:'Khandbari Municipality',
+const mkCase = (name, disease, tt) => run(`apiSaveCase({ palika:'Khandbari Municipality',
   disease:'${disease}', patient_name:'${name}', age:24, age_unit:'years', sex:'Female',
   ward:3, tole:'Tumlingtar', test_type:'${tt}', test_date:TODAY })`);
 const c1 = mkCase("Sabina Rai", "dengue", "NS1");
@@ -87,70 +89,66 @@ check("third case blocked by quota", c3.ok && c3.data.saved === false, c3);
 check("quota message explains why", c3.ok && /already entered/.test(c3.data.message), c3.ok && c3.data.message);
 
 console.log("\n--- 8. Validation of case fields ---");
-const badCase = run(`apiSaveCase(TOK, { palika:'Khandbari Municipality', disease:'scrub',
+const badCase = run(`apiSaveCase({ palika:'Khandbari Municipality', disease:'scrub',
   patient_name:'', age:'', sex:'', ward:'', test_type:'', test_date:TODAY })`);
 check("empty case rejected", badCase.ok && badCase.data.saved === false, badCase);
 check("all five fields flagged", badCase.ok && Object.keys(badCase.data.errors).length === 5,
   badCase.ok && badCase.data.errors);
-const wrongTest = run(`apiSaveCase(TOK, { palika:'Khandbari Municipality', disease:'scrub',
+const wrongTest = run(`apiSaveCase({ palika:'Khandbari Municipality', disease:'scrub',
   patient_name:'X Y', age:30, sex:'Male', ward:1, test_type:'NS1', test_date:TODAY })`);
 check("dengue test type refused for scrub", wrongTest.ok === false && /not valid/.test(wrongTest.error), wrongTest);
 
 console.log("\n--- 9. Reconciliation now balanced ---");
-const after = run("apiGetPulse(TOK,'Khandbari Municipality',TODAY)");
+const after = run("apiGetPulse('Khandbari Municipality',TODAY)");
 check("dengue reconciled (2 of 2)",
   after.ok && after.data.issues.dengue.entered === 2 && after.data.issues.dengue.declared === 2, after);
 check("no dengue warning left", after.ok && after.data.issues.dengue.level === null,
   after.ok && after.data.issues.dengue);
 check("scrub still owes 1", after.ok && after.data.issues.scrub.level === "warn");
 
-console.log("\n--- 10. Cross-palika write is refused ---");
-const foreign = run(`apiSavePulse(TOK, { palika:'Madi Municipality', report_date:TODAY, dengue_ns1:1 })`);
-check("cannot write another palika", foreign.ok === false && foreign.code === "NOT_YOUR_PALIKA", foreign);
+console.log("\n--- 10. Any palika may be written to ---");
+/* Deliberate: with nobody identified, "your own palika" has no meaning. This
+   is the single largest behavioural change from removing authentication — a
+   mistyped palika is now a data-integrity risk with no technical control
+   behind it, only the standing selector in the UI. */
+const foreign = run(`apiSavePulse({ palika:'Madi Municipality', report_date:TODAY, dengue_ns1:1 })`);
+check("writing another palika is allowed", foreign.ok === true && foreign.data.saved === true, foreign);
+const nosuch = run(`apiSavePulse({ palika:'Nowhere Municipality', report_date:TODAY, dengue_ns1:1 })`);
+check("but a palika that does not exist is still refused",
+  nosuch.ok === false && /Select a palika/.test(nosuch.error), nosuch);
 
-console.log("\n--- 11. PII gating ---");
-const list = run("apiListCases(TOK, {})");
-check("unit sees its own rows", list.ok && list.data.total === 2, list);
-check("names masked for unit role", list.ok && list.data.rows[0].patient_name === "••••••",
+console.log("\n--- 11. Patient names are returned to everyone ---");
+const list = run("apiListCases({})");
+check("every palika's rows are visible", list.ok && list.data.total === 2, list);
+check("names are not masked", list.ok && list.data.rows[0].patient_name !== "••••••",
   list.ok && list.data.rows[0].patient_name);
-check("canSeeNames false", list.ok && list.data.canSeeNames === false);
-const exportDenied = run("apiExport(TOK,'linelist',{})");
-check("unit cannot export the line list", exportDenied.ok === false && exportDenied.code === "DISTRICT_ONLY", exportDenied);
-const outcomeDenied = run(`apiSetOutcome(TOK, ${JSON.stringify(c1.data ? c1.data.case_id : "")}, 'recovered')`);
-check("unit cannot set outcome", outcomeDenied.ok === false && outcomeDenied.code === "DISTRICT_ONLY", outcomeDenied);
-
-console.log("\n--- 12. District session ---");
-run(`
-  var dsalt = randomToken(16);
-  configSet('district_code_salt', dsalt);
-  configSet('district_code_hash', hashCode('DISTRICT99', dsalt));
-  resetCaches();
-`);
-const dlogin = run("apiLoginDistrict('DISTRICT99')");
-check("district login works", dlogin.ok === true, dlogin);
-run(`var DTOK = ${JSON.stringify(dlogin.ok ? dlogin.data.token : "")};`);
-const dlist = run("apiListCases(DTOK, {})");
-check("district sees real names", dlist.ok && dlist.data.rows[0].patient_name !== "••••••",
-  dlist.ok && dlist.data.rows[0].patient_name);
-check("district canSeeNames true", dlist.ok && dlist.data.canSeeNames === true);
-const setOut = run(`apiSetOutcome(DTOK, ${JSON.stringify(c1.data.case_id)}, 'recovered')`);
-check("district sets outcome", setOut.ok === true, setOut);
+check("a real name comes back", list.ok && /Rai|Limbu/.test(list.data.rows[0].patient_name),
+  list.ok && list.data.rows[0].patient_name);
+check("canSeeNames true", list.ok && list.data.canSeeNames === true);
+const exportOpen = run("apiExport('linelist',{})");
+check("the line list export is open", exportOpen.ok === true, exportOpen);
+check("and it carries names", exportOpen.ok && /Rai|Limbu/.test(exportOpen.data.csv));
+const setOut = run(`apiSetOutcome(${JSON.stringify(c1.data.case_id)}, 'recovered')`);
+check("anyone may set an outcome", setOut.ok === true, setOut);
+check("the data quality report is open", run("apiDataQuality()").ok === true);
 
 console.log("\n--- 13. Dashboard ---");
-const dash = run("apiDashboard(DTOK,'30','all')");
+const dash = run("apiDashboard('30','all')");
 check("dashboard ok", dash.ok === true, dash);
 check("two disease boards", dash.ok && dash.data.boards.length === 2);
 const dengueBoard = dash.ok && dash.data.boards.find(b => b.key === "dengue");
-check("dengue tests total 8", dengueBoard && dengueBoard.total.testsRange === 8, dengueBoard && dengueBoard.total);
+/* 9, not 8: section 10 wrote a Madi return with one NS1 test, which it is now
+   allowed to do. The extra test is the cross-palika write showing up here. */
+check("dengue tests total 9", dengueBoard && dengueBoard.total.testsRange === 9, dengueBoard && dengueBoard.total);
 check("dengue positives total 2", dengueBoard && dengueBoard.total.posRange === 2, dengueBoard && dengueBoard.total);
 check("curve has one point per day", dengueBoard && dengueBoard.curve.counts.length === dengueBoard.curve.days.length);
-check("completeness 1 of 10", dash.ok && dash.data.completeness.reported.length === 1 &&
+check("completeness 2 of 10", dash.ok && dash.data.completeness.reported.length === 2 &&
   dash.data.completeness.total === 10, dash.ok && dash.data.completeness);
 
 console.log("\n--- 14. Soft delete ---");
-const del = run(`apiDeleteCase(DTOK, ${JSON.stringify(c2.data.case_id)})`);
+const del = run(`apiDeleteCase(${JSON.stringify(c2.data.case_id)})`);
 check("delete ok", del.ok === true, del);
-const afterDel = run("apiListCases(DTOK,{})");
+const afterDel = run("apiListCases({})");
 check("row hidden after delete", afterDel.ok && afterDel.data.total === 1, afterDel);
 check("row physically retained for audit",
   run("readAll('Cases').length") === 2, run("readAll('Cases').length"));
@@ -161,66 +159,47 @@ check("no duplicate returns", dq.duplicates.length === 0, dq.duplicates);
 check("detects the now-unbalanced dengue count", dq.mismatches.some(m => /Dengue/.test(m)), dq.mismatches);
 
 console.log("\n--- 16. Date window ---");
-const future = run(`apiSavePulse(TOK, { palika:'Khandbari Municipality', report_date: addDays(TODAY, 1) })`);
+const future = run(`apiSavePulse({ palika:'Khandbari Municipality', report_date: addDays(TODAY, 1) })`);
 check("future date refused", future.ok === false && /future/.test(future.error), future);
-const old = run(`apiSavePulse(TOK, { palika:'Khandbari Municipality', report_date: addDays(TODAY, -30) })`);
+const old = run(`apiSavePulse({ palika:'Khandbari Municipality', report_date: addDays(TODAY, -30) })`);
 check("stale date refused", old.ok === false && /closed for editing/.test(old.error), old);
 
 console.log("\n--- 17. Exports ---");
-const exp = run("apiExport(DTOK,'linelist',{})");
+const exp = run("apiExport('linelist',{})");
 check("line list CSV produced", exp.ok && /patient_name/.test(exp.data.csv), exp.ok && exp.data.filename);
-const sum = run("apiExport(DTOK,'summary',{range:'30',scope:'all'})");
+const sum = run("apiExport('summary',{range:'30',scope:'all'})");
 check("summary CSV produced", sum.ok && /Dengue/.test(sum.data.csv));
 check("CSV escapes the remark field",
-  run("apiExport(DTOK,'pulses',{})").data.csv.indexOf("RDT stock low") >= 0);
+  run("apiExport('pulses',{})").data.csv.indexOf("RDT stock low") >= 0);
 
-console.log("\n--- 18. Session expiry ---");
-run("apiLogout(TOK)");
-const expired = run("apiGetPulse(TOK,'Khandbari Municipality',TODAY)");
-check("logged-out token rejected", expired.ok === false && expired.code === "SESSION_EXPIRED", expired);
+console.log("\n--- 18. Calls keep working; nothing expires ---");
+/* There is no session, so there is nothing to time out. The point of this check
+   is that repeated calls stay successful — the old suite proved a token died
+   here, and its absence should be asserted rather than merely deleted. */
+const again = run("apiGetPulse('Khandbari Municipality',TODAY)");
+check("a later call still succeeds", again.ok === true, again);
+check("no session state accumulates in Properties",
+  run("Object.keys(PropertiesService.getScriptProperties().getProperties()).filter(function(k){return /^sess_|^try_/.test(k);}).length") === 0);
 
 console.log("\n--- 19. Audit trail ---");
 const auditRows = run("readAll('Audit').length");
 check("audit trail populated", auditRows > 8, auditRows);
+/* Worth stating plainly: the audit trail still records what changed and when,
+   but with no identity it can no longer record WHO. Every row is 'open'. */
+check("writes are attributed to the open role",
+  run("readAll('Audit').filter(function(a){return a.role === 'open';}).length") > 0,
+  run("readAll('Audit').map(function(a){return a.role;}).join(',')"));
 
-console.log("\n--- 20. Session survives a cache eviction ---");
-const relogin = run("apiLogin('Khandbari Municipality','TESTME')");
-check("re-login ok", relogin.ok === true, relogin);
-run(`var TOK2 = ${JSON.stringify(relogin.ok ? relogin.data.token : "")};`);
+console.log("\n--- 20. A cache eviction changes nothing ---");
 cacheControl.enabled = false;               // simulate Google evicting the cache
-const survived = run("apiGetPulse(TOK2,'Khandbari Municipality',TODAY)");
+const survived = run("apiGetPulse('Khandbari Municipality',TODAY)");
 cacheControl.enabled = true;
-check("still signed in after eviction", survived.ok === true, survived);
-
-console.log("\n--- 21. Expiry is enforced from the payload, not the cache ---");
-run(`
-  var k = sessionKey_(TOK2);
-  var s = JSON.parse(PropertiesService.getScriptProperties().getProperty(k));
-  s.expires = Date.now() - 1000;            // backdate it
-  PropertiesService.getScriptProperties().setProperty(k, JSON.stringify(s));
-  CacheService.getScriptCache().remove(k);
-`);
-const expiredNow = run("apiGetPulse(TOK2,'Khandbari Municipality',TODAY)");
-check("expired session rejected", expiredNow.ok === false && expiredNow.code === "SESSION_EXPIRED", expiredNow);
-check("expired token purged from durable store",
-  run("PropertiesService.getScriptProperties().getProperty(sessionKey_(TOK2))") === null);
-
-console.log("\n--- 22. Lockout is durable and cannot be reset by eviction ---");
-run("clearAttempts_('unit:U03');");
-for (let i = 0; i < 8; i++) run("apiLogin('Khandbari Municipality','NOPE')");
-cacheControl.enabled = false;
-const locked = run("apiLogin('Khandbari Municipality','TESTME')");
-cacheControl.enabled = true;
-check("locked out even with the right code", locked.ok === false && /Too many wrong codes/.test(locked.error), locked);
-run("clearAttempts_('unit:U03');");
-const afterClear = run("apiLogin('Khandbari Municipality','TESTME')");
-check("login works once the lockout is cleared", afterClear.ok === true, afterClear);
-run(`var TOK3 = ${JSON.stringify(afterClear.ok ? afterClear.data.token : "")};`);
+check("still works after eviction", survived.ok === true, survived);
 
 console.log("\n--- 23. Read amplification ---");
 run("resetCaches();");
 counters.getValues = 0;
-run(`apiSaveCase(TOK3, { palika:'Khandbari Municipality', disease:'scrub',
+run(`apiSaveCase({ palika:'Khandbari Municipality', disease:'scrub',
   patient_name:'Pemba Sherpa', age:41, age_unit:'years', sex:'Male', ward:2,
   tole:'Num', test_type:'IgM RDT', test_date:TODAY })`);
 const reads = counters.getValues;
@@ -236,19 +215,10 @@ const afterCount = run("readAll('Cases').filter(function(c){return !c.deleted;})
 check("read after write sees the new row", afterCount === beforeCount + 1, { beforeCount, afterCount });
 
 console.log("\n--- 25. Nil report ---");
-run("clearAttempts_('unit:U05');");
-run(`
-  var u5 = findByKey('Units','unit_id','U05');
-  var s5 = randomToken(16);
-  updateRowAt('Units', u5._row, Object.assign({}, u5, { code_hash: hashCode('NILNIL', s5), code_salt: s5 }));
-  resetCaches();
-`);
-const nilLogin = run("apiLogin('Panchkhapan Municipality','NILNIL')");
-run(`var NTOK = ${JSON.stringify(nilLogin.ok ? nilLogin.data.token : "")};`);
-const nil = run(`apiSavePulse(NTOK, { palika:'Panchkhapan Municipality', report_date:TODAY, nil_report:true })`);
+const nil = run(`apiSavePulse({ palika:'Panchkhapan Municipality', report_date:TODAY, nil_report:true })`);
 check("nil return accepted", nil.ok && nil.data.saved === true, nil);
 check("nil flag persisted", nil.ok && nil.data.pulse.nil_report === true, nil.ok && nil.data.pulse.nil_report);
-const dash2 = run("apiDashboard(NTOK,'30','all')");
+const dash2 = run("apiDashboard('30','all')");
 check("nil report counts toward completeness",
   dash2.ok && dash2.data.completeness.reported.indexOf('Panchkhapan Municipality') >= 0,
   dash2.ok && dash2.data.completeness.reported);

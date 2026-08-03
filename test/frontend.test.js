@@ -10,7 +10,7 @@ const { globals } = require("./gasmock");
 const dir = process.argv[2];
 
 /* ---- 1. Boot the server side ------------------------------------------- */
-const order = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Auth.gs", "Api.gs", "Code.gs"];
+const order = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Api.gs", "Rpc.gs", "Code.gs"];
 const server = vm.createContext(Object.assign({}, globals));
 for (const f of order) {
   vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), server, { filename: f });
@@ -22,18 +22,7 @@ console.log = () => {};              // silence setup chatter
 srv("setupDatabase()");
 console.log = quiet;
 
-srv(`
-  ['U03','U05'].forEach(function (id) {
-    var u = findByKey('Units','unit_id',id);
-    var salt = randomToken(16);
-    updateRowAt('Units', u._row, Object.assign({}, u, {
-      code_hash: hashCode('TESTME', salt), code_salt: salt }));
-  });
-  var ds = randomToken(16);
-  configSet('district_code_salt', ds);
-  configSet('district_code_hash', hashCode('DISTRICT99', ds));
-  resetCaches();
-`);
+// Nothing to set up: there are no codes to issue and no session to establish.
 const TODAY = srv("todayIso()");
 
 /* ---- 2. Build the page exactly as HtmlService would -------------------- */
@@ -156,36 +145,37 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
 (async function main() {
   await settle();
 
-  console.log("\n--- A. Page loads and shows the sign-in gate ---");
+  console.log("\n--- A. Page loads straight into the app, with no sign-in ---");
   check("no unresolved template tags in DOM", !D.body.innerHTML.includes("<?"));
-  check("gate rendered", !!$(".gate"), D.body.innerHTML.slice(0, 160));
-  check("both sign-in tabs present", $$('[data-act="gate-tab"]').length === 2);
-  check("palika dropdown lists all 10 units", $("#gate-palika") && $("#gate-palika").options.length === 10,
-    $("#gate-palika") && $("#gate-palika").options.length);
-  check("emblem fallback rendered", !!$(".gate svg"));
+  check("no sign-in gate is rendered", !$(".gate"), D.body.innerHTML.slice(0, 160));
+  check("no access-code field anywhere", !$("#gate-code") && !$("#unlock-code"));
+  check("app shell rendered immediately", !!$(".masthead"), text().slice(0, 160));
   check("bootstrap was called", calls.includes("apiBootstrap"));
-  check("Nepali script renders on the gate", /[ऀ-ॿ]/.test(text()));
+  check("no login call was ever made",
+    !calls.includes("apiLogin") && !calls.includes("apiLoginDistrict"), calls.join(","));
+  check("emblem fallback rendered", !!$("svg"));
+  check("Nepali script renders", /[ऀ-ॿ]/.test(text()));
 
-  console.log("\n--- B. Wrong code is refused, palika choice survives ---");
-  setInput("#gate-palika", "Panchkhapan Municipality");
-  setInput("#gate-code", "WRONGX");
-  click('[data-act="login-unit"]');
-  await settle();
-  check("error message shown", !!$(".msg.err"), text().slice(0, 160));
-  check("message says the code is wrong", /not correct/i.test(text()));
-  check("palika selection retained", $("#gate-palika") && $("#gate-palika").value === "Panchkhapan Municipality",
-    $("#gate-palika") && $("#gate-palika").value);
-
-  console.log("\n--- C. Successful unit sign-in ---");
-  setInput("#gate-palika", "Khandbari Municipality");
-  setInput("#gate-code", "TESTME");
-  click('[data-act="login-unit"]');
+  console.log("\n--- B. The palika is chosen, not authenticated ---");
+  check("palika selector lists all 10 units",
+    $("#side-palika") && $("#side-palika").options.length === 10,
+    $("#side-palika") && $("#side-palika").options.length);
+  setInput("#side-palika", "Panchkhapan Municipality");
   await settle(30);
-  check("app shell rendered", !!$(".masthead"), text().slice(0, 160));
+  check("choosing a palika takes effect", /Panchkhapan Municipality/.test(text()),
+    text().slice(0, 200));
+  check("the choice is remembered for next time",
+    win.localStorage.getItem("vbd.palika.v1") === "Panchkhapan Municipality",
+    win.localStorage.getItem("vbd.palika.v1"));
+
+  console.log("\n--- C. Back to the palika the rest of this run uses ---");
+  setInput("#side-palika", "Khandbari Municipality");
+  await settle(30);
+  check("app shell still rendered", !!$(".masthead"), text().slice(0, 160));
   check("sidebar nav present", $$(".nav button").length >= 5, $$(".nav button").length);
   check("dashboard is the landing view", /District dashboard/.test(text()));
-  check("signed-in palika shown", /Khandbari Municipality/.test(text()));
-  check("session stored for refresh", !!win.sessionStorage.getItem("vbd.session.v1"));
+  check("selected palika shown", /Khandbari Municipality/.test(text()));
+  check("no session was stored", !win.sessionStorage.getItem("vbd.session.v1"));
 
   console.log("\n--- D. Dashboard renders ---");
   check("dengue board present", /Dengue/.test(text()));
@@ -207,7 +197,12 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   check("dengue inputs present", !!$("#f-dengue_ns1") && !!$("#f-dengue_igm"));
   check("scrub inputs present", !!$("#f-scrub_rdt") && !!$("#f-scrub_elisa"));
   check("nil-report checkbox present", !!$("#d-nil"));
-  check("palika locked for a unit session", !!$('input[disabled][value="Khandbari Municipality"]'));
+  /* The palika is now a free choice on the form rather than a locked field.
+     That is the trade being made: nothing stops a reporter filing for the wrong
+     palika except reading the selector, so it has to be visible and correct. */
+  check("palika is a selector, not a locked field", !!$("#d-palika") && !$('input[disabled]'));
+  check("it is set to the palika in use", $("#d-palika").value === "Khandbari Municipality",
+    $("#d-palika").value);
 
   console.log("\n--- F. Live reconciliation while typing ---");
   setInput("#f-dengue_ns1", "6");
@@ -303,24 +298,15 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
     srv("readAll('Cases').filter(function(c){return !c.deleted;}).length") === 2,
     srv("readAll('Cases').filter(function(c){return !c.deleted;}).length"));
 
-  console.log("\n--- L. Line list locked to a unit session ---");
+  console.log("\n--- L/M. The line list opens directly, names and all ---");
   navTo("Line list");
-  await settle(20);
-  check("lock panel shown", /Line list is locked/.test(text()));
-  check("unlock input present", !!$("#unlock-code"));
-  setInput("#unlock-code", "NOPE99");
-  click('[data-act="unlock"]');
-  await settle(20);
-  check("wrong district code refused", !!$(".msg.err"), text().slice(0, 160));
-
-  console.log("\n--- M. Unlock with the district code ---");
-  setInput("#unlock-code", "DISTRICT99");
-  click('[data-act="unlock"]');
   await settle(40);
+  check("no lock panel", !/is locked/.test(text()), text().slice(0, 160));
+  check("no unlock input", !$("#unlock-code"));
   check("line list table rendered", !!$("table"), text().slice(0, 160));
   check("real patient names visible", /Sabina Rai/.test(text()));
   check("second case listed", /Hari Limbu/.test(text()));
-  check("utility bar notes the unlock", /line list unlocked/.test(text()));
+  check("no name is masked", !/••••/.test(text()));
   check("each row has edit and delete", $$('[data-act="edit-case"]').length === 2,
     $$('[data-act="edit-case"]').length);
 
@@ -395,11 +381,13 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   await settle(40);
   check("back to whole district", /Sankhuwasabha District/.test(text()));
 
-  console.log("\n--- T. Sign out ---");
-  click('[data-act="signout"]');
-  await settle(30);
-  check("returned to the gate", !!$(".gate"));
-  check("session cleared from storage", !win.sessionStorage.getItem("vbd.session.v1"));
+  console.log("\n--- T. There is nothing to sign out of ---");
+  check("no sign-out control is offered", !$('[data-act="signout"]'));
+  check("nothing was ever put in sessionStorage",
+    !win.sessionStorage.getItem("vbd.session.v1"));
+  check("only the palika choice is persisted",
+    win.localStorage.getItem("vbd.palika.v1") === "Khandbari Municipality",
+    win.localStorage.getItem("vbd.palika.v1"));
 
   console.log("\n--- U. Hygiene ---");
   check("no unhandled window errors", errors.length === 0, errors.slice(0, 3).join(" | "));

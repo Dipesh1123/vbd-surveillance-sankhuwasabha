@@ -12,7 +12,7 @@ const { startApp, makeChecker } = require("./harness");
 const dir = process.argv[2] || "apps-script";
 const { check, finish } = makeChecker();
 
-const GS_ORDER = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Auth.gs", "Api.gs", "Code.gs"];
+const GS_ORDER = ["Schema.gs", "Util.gs", "Repo.gs", "Setup.gs", "Api.gs", "Rpc.gs", "Code.gs"];
 
 // Deliberately skip setupDatabase() here — this simulates a brand-new,
 // never-provisioned spreadsheet, which is exactly the state a fresh
@@ -59,9 +59,15 @@ const server = { ctx, run: expr => vm.runInContext(expr, ctx) };
 
   app.click('[data-act="retry-setup"]');
   await app.settle(60);
-  check("gate now renders normally", !!app.$(".gate"), app.text().slice(0, 160));
+  /* No gate any more — with authentication removed the app drops straight into
+     the shell. Recovery therefore looks like the dashboard appearing, not a
+     sign-in form. */
+  check("the app shell now renders", !!app.$(".nav"), app.text().slice(0, 160));
   check("the not-ready message is gone", !/not ready yet/i.test(app.text()));
-  check("palika sign-in is available", !!app.$("#gate-palika") && app.$("#gate-palika").options.length === 10);
+  check("no sign-in gate is shown", !app.$("#gate-palika") && !app.$(".gate"));
+  check("the palika selector lists all 10",
+    !!app.$("#side-palika") && app.$("#side-palika").options.length === 10,
+    app.$("#side-palika") && app.$("#side-palika").options.length);
   check("no leftover errors after recovery", app.errors.length === 0, app.errors.join(" | "));
 
   finish();

@@ -149,7 +149,6 @@ function rpc(fn) {
     setBusy(false);
     if (!res) throw new Error('The server returned nothing. Try again.');
     if (res.ok) return res.data;
-    if (res.code === 'SESSION_EXPIRED') signOut(true);
     throw new Error(res.error || 'Something went wrong.');
   }, function (err) {
     setBusy(false);
@@ -199,9 +198,7 @@ var S = {
   list: null,
   listLoading: false,
 
-  outcomeFilter: 'all',
-  gateTab: 'unit',
-  gateError: ''
+  outcomeFilter: 'all'
 };
 
 function emptyCase(date) {
@@ -211,63 +208,38 @@ function emptyCase(date) {
   };
 }
 
-var STORE_KEY = 'vbd.session.v1';
-function saveSession() {
-  try {
-    sessionStorage.setItem(STORE_KEY, JSON.stringify({ unit: S.unit, district: S.district }));
-  } catch (e) { /* private browsing — session simply won't survive a refresh */ }
+/*
+ * There is no session to remember, but which palika this device reports for is
+ * worth keeping: a health post shares one phone and files for the same palika
+ * every day. localStorage rather than sessionStorage, so it survives the
+ * browser being closed — which on a shared phone is most of the time.
+ */
+var STORE_KEY = 'vbd.palika.v1';
+function savePalika() {
+  try { localStorage.setItem(STORE_KEY, S.palika || ''); } catch (e) { /* private mode */ }
 }
-function loadSession() {
-  try {
-    var raw = sessionStorage.getItem(STORE_KEY);
-    if (!raw) return;
-    var o = JSON.parse(raw);
-    S.unit = o.unit || null;
-    S.district = o.district || null;
-  } catch (e) { /* ignore */ }
-}
-function clearSession() {
-  try { sessionStorage.removeItem(STORE_KEY); } catch (e) {}
-}
-
-function activeToken() { return (S.unit && S.unit.token) || (S.district && S.district.token) || ''; }
-function writeToken()  { return (S.unit && S.unit.token) || (S.district && S.district.token) || ''; }
-function districtToken() { return S.district && S.district.token; }
-function isDistrict() { return !!districtToken(); }
-function signedIn() { return !!(S.unit || S.district); }
-
-function signOut(silent) {
-  var t = activeToken();
-  S.unit = null; S.district = null;
-  clearSession();
-  /* Fire and forget. The local session is already gone, so a server that is
-     slow or unreachable must not leave the user looking signed in. */
-  if (t && TRANSPORT !== 'none') {
-    try {
-      (TRANSPORT === 'gas' ? gasCall('apiLogout', [t]) : httpCall('apiLogout', [t]))
-        .catch(function () {});
-    } catch (e) { /* ignore */ }
-  }
-  S.view = 'dashboard';
-  render();
-  if (!silent) toast('Signed out.');
+function loadPalika() {
+  try { return localStorage.getItem(STORE_KEY) || ''; } catch (e) { return ''; }
 }
 
 /* ----------------------------------------------------------------- boot -- */
 
 function start() {
-  loadSession();
-  rpc('apiBootstrap', activeToken())
+  rpc('apiBootstrap')
     .then(function (data) {
       if (data && data.needsSetup) { S.needsSetup = data; render(); return; }
       S.boot = data;
       S.reportDate = data.today;
-      if (!S.palika) S.palika = S.unit ? S.unit.palika : (data.units[0] ? data.units[0].palika : '');
+      if (!S.palika) {
+        // A remembered palika that has since been removed from the Units sheet
+        // must not stick around as a name the server will reject on save.
+        var remembered = loadPalika();
+        var known = data.units.filter(function (u) { return u.palika === remembered; })[0];
+        S.palika = known ? known.palika : (data.units[0] ? data.units[0].palika : '');
+      }
       S.caseForm.test_date = data.today;
-      // A stored token that the server no longer recognises must not look valid.
-      if (!data.session) { S.unit = null; S.district = null; clearSession(); }
       render();
-      if (signedIn()) loadDashboard();
+      loadDashboard();
     })
     .catch(function (e) {
       /* Two very different reasons to land here, and the advice differs. A
@@ -315,8 +287,6 @@ function render() {
     html = viewNeedsSetup();
   } else if (!S.boot) {
     html = '<div class="busy"><div class="spin"></div></div>';
-  } else if (!signedIn()) {
-    html = viewGate();
   } else {
     html = viewShell();
   }
@@ -368,47 +338,6 @@ function viewNeedsSetup() {
   '</div></div></div>';
 }
 
-function viewGate() {
-  var c = S.boot.config;
-  var unitTab = S.gateTab === 'unit';
-  var opts = S.boot.units.map(function (u) {
-    return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
-      esc(u.palika) + '</option>';
-  }).join('');
-
-  return '' +
-  '<div class="gate"><div class="box"><div class="top"></div><div class="inner">' +
-    logoMark(62) +
-    '<div style="text-align:center">' +
-      '<div class="ne" style="font-size:12.5px;color:var(--maroon);font-weight:600">नेपाल सरकार · स्वास्थ्य तथा जनसंख्या मन्त्रालय</div>' +
-      '<div style="font-size:18px;font-weight:700;color:var(--blue);margin-top:3px">VBD Surveillance</div>' +
-      '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">' + esc(c.office_name) + ' · ' + esc(c.province) + '</div>' +
-    '</div>' +
-
-    '<div class="btn-row" style="gap:6px">' +
-      '<button class="btn sm ' + (unitTab ? 'on' : '') + '" data-act="gate-tab" data-tab="unit" style="flex:1">Palika focal person</button>' +
-      '<button class="btn sm ' + (!unitTab ? 'on' : '') + '" data-act="gate-tab" data-tab="district" style="flex:1">District office</button>' +
-    '</div>' +
-
-    (unitTab
-      ? '<label class="field"><span class="cap">Your palika <span>पालिका</span></span>' +
-          '<select id="gate-palika" data-field="gate-palika">' + opts + '</select></label>' +
-        '<label class="field"><span class="cap">Access code <span>पहुँच कोड</span></span>' +
-          '<input id="gate-code" data-field="gate-code" type="password" autocomplete="off" ' +
-          'style="letter-spacing:.14em" placeholder="6-character code"></label>' +
-        '<div class="hint">The district office issues this code. If you have lost it, call the health office for a new one.</div>'
-      : '<label class="field"><span class="cap">District access code <span>जिल्ला कोड</span></span>' +
-          '<input id="gate-code" data-field="gate-code" type="password" autocomplete="off" ' +
-          'style="letter-spacing:.14em" placeholder="District code"></label>' +
-        '<div class="hint">District staff only. This code unlocks patient names on the line list.</div>') +
-
-    (S.gateError ? '<div class="msg err">' + esc(S.gateError) + '</div>' : '') +
-    '<button class="btn primary" data-act="' + (unitTab ? 'login-unit' : 'login-district') + '">Sign in</button>' +
-    '<div class="hint" style="text-align:center;font-size:11.5px;color:var(--muted-4)">' +
-      'Patient names are stored on the district line list and are never published.</div>' +
-  '</div></div></div>';
-}
-
 /* ----------------------------------------------------------- app shell -- */
 
 function currentPalikaNe() {
@@ -423,7 +352,6 @@ function findUnit(palika) {
 
 function viewShell() {
   var c = S.boot.config;
-  var who = S.unit ? S.unit.palika : 'District office';
 
   var body;
   if (S.view === 'dashboard') body = viewDashboard();
@@ -441,9 +369,7 @@ function viewShell() {
     '<span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">' +
       '<span>' + esc(fmtDate(S.boot.today)) + '</span>' +
       '<span class="sep">|</span>' +
-      '<span>' + esc(who) + (isDistrict() ? ' · line list unlocked' : '') + '</span>' +
-      '<span class="sep">|</span>' +
-      '<a href="#" data-act="signout" style="color:#fff">Sign out</a>' +
+      '<span>Reporting for ' + esc(S.palika) + '</span>' +
     '</span>' +
   '</div>' +
 
@@ -480,6 +406,10 @@ function viewSide() {
     return '<option value="' + esc(u.palika) + '"' + (u.palika === S.scope ? ' selected' : '') + '>' +
       esc(u.palika) + '</option>';
   }).join('');
+  var reportingOpts = S.boot.units.map(function (u) {
+    return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
+      esc(u.palika) + '</option>';
+  }).join('');
 
   return '' +
   '<aside class="side">' +
@@ -501,19 +431,22 @@ function viewSide() {
           : '') +
       '</div>' +
 
-      navBtn('linelist', 'Line list', 'लाइन लिस्ट', isDistrict() ? '' : '<span class="chev">🔒</span>') +
-      navBtn('outcome', 'Outcome', 'नतिजा', isDistrict() ? '' : '<span class="chev">🔒</span>') +
+      navBtn('linelist', 'Line list', 'लाइन लिस्ट') +
+      navBtn('outcome', 'Outcome', 'नतिजा') +
     '</nav>' +
 
     '<div class="side-foot">' +
-      '<label class="lbl">Viewing <span class="ne">क्षेत्र</span></label>' +
+      /* Which palika this device files for. With no sign-in this is the only
+         thing that says who the data belongs to, so it is deliberately a
+         standing control rather than something buried in a form. */
+      '<label class="lbl">Reporting for <span class="ne">पालिका</span></label>' +
+      '<select id="side-palika" data-field="palika">' + reportingOpts + '</select>' +
+      '<label class="lbl" style="margin-top:14px">Viewing <span class="ne">क्षेत्र</span></label>' +
       '<select id="side-scope" data-field="scope">' +
         '<option value="all"' + (S.scope === 'all' ? ' selected' : '') + '>' +
           esc(S.boot.config.district_name) + ' District — all</option>' + palikaOpts +
       '</select>' +
-      '<div class="hint" style="margin-top:10px">' +
-        esc(S.unit ? S.unit.palika : 'District office') + '<br>' + esc(fmtDate(S.boot.today)) +
-      '</div>' +
+      '<div class="hint" style="margin-top:10px">' + esc(fmtDate(S.boot.today)) + '</div>' +
     '</div>' +
   '</aside>';
 }
@@ -535,7 +468,7 @@ function scopeBar() {
 /* ------------------------------------------------------------ dashboard -- */
 
 function loadDashboard() {
-  return rpc('apiDashboard', activeToken(), S.dashRange, S.scope)
+  return rpc('apiDashboard', S.dashRange, S.scope)
     .then(function (d) { S.dash = d; render(); })
     .catch(function (e) { toast(e.message, 'err'); });
 }
@@ -712,7 +645,7 @@ function completenessPanel(c) {
 /* -------------------------------------------------------- daily numbers -- */
 
 function loadPulse() {
-  return rpc('apiGetPulse', writeToken(), S.palika, S.reportDate)
+  return rpc('apiGetPulse', S.palika, S.reportDate)
     .then(function (d) {
       S.pulse = d.pulse;
       S.issues = d.issues;
@@ -859,13 +792,11 @@ function viewDaily() {
         'max="' + esc(S.boot.today) + '"' + (minDate ? ' min="' + esc(minDate) + '"' : '') + '>' +
         '<span class="bs">' + esc(bs(S.reportDate)) + '</span></label>' +
       '<label class="field"><span class="cap">Palika <span>पालिका</span></span>' +
-        (S.unit
-          ? '<input value="' + esc(S.palika) + '" disabled>' +
-            '<span class="sub">You can only report for your own palika.</span>'
-          : '<select id="d-palika" data-field="work-palika">' + S.boot.units.map(function (u) {
-              return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
-                esc(u.palika) + '</option>';
-            }).join('') + '</select><span class="sub">District session — choose the palika you are entering for.</span>') +
+        '<select id="d-palika" data-field="work-palika">' + S.boot.units.map(function (u) {
+          return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
+            esc(u.palika) + '</option>';
+        }).join('') + '</select>' +
+        '<span class="sub">Check this is your palika before saving.</span>' +
       '</label>' +
     '</div>' +
 
@@ -960,7 +891,7 @@ function savePulse() {
     });
   });
 
-  rpc('apiSavePulse', writeToken(), payload)
+  rpc('apiSavePulse', payload)
     .then(function (r) {
       if (!r.saved) { toast(r.message, 'err'); return; }
       S.pulse = r.pulse; S.issues = r.issues; S.entered = r.entered; S.draft = {};
@@ -1027,10 +958,9 @@ function viewCases() {
         '<input id="c-date" data-field="report-date" type="date" value="' + esc(S.reportDate) + '" max="' + esc(S.boot.today) + '">' +
         '<span class="bs">' + esc(bs(S.reportDate)) + '</span></label>' +
       '<div class="field"><span class="cap">Palika <span>पालिका</span></span>' +
-        (S.unit ? '<input value="' + esc(S.palika) + '" disabled>'
-                : '<select id="c-palika" data-field="work-palika">' + S.boot.units.map(function (u) {
-                    return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
-                      esc(u.palika) + '</option>'; }).join('') + '</select>') +
+        '<select id="c-palika" data-field="work-palika">' + S.boot.units.map(function (u) {
+          return '<option value="' + esc(u.palika) + '"' + (u.palika === S.palika ? ' selected' : '') + '>' +
+            esc(u.palika) + '</option>'; }).join('') + '</select>' +
       '</div>' +
     '</div>' +
 
@@ -1108,7 +1038,7 @@ function saveCase() {
   p.case_id = S.editingId || '';
   if (!p.test_date) p.test_date = S.reportDate;
 
-  rpc('apiSaveCase', writeToken(), p)
+  rpc('apiSaveCase', p)
     .then(function (r) {
       if (!r.saved) {
         S.caseErrors = r.errors || {};
@@ -1128,25 +1058,9 @@ function saveCase() {
 
 /* ------------------------------------------------------------- line list -- */
 
-function unlockPanel(title) {
-  return '' +
-  '<section class="card" style="max-width:520px;padding:24px 26px;display:flex;flex-direction:column;gap:16px">' +
-    '<div><div style="font-size:17px;font-weight:700">' + esc(title) + ' is locked</div>' +
-      '<div class="ne" style="font-size:12.5px;color:var(--muted);margin-top:4px">यो पृष्ठ सुरक्षित छ</div></div>' +
-    '<div class="hint">This screen shows patient names. Enter the district access code to unlock it. ' +
-      'Names are never shown on the dashboard and never leave the district line list.</div>' +
-    '<label class="field"><span class="cap">District access code <span>जिल्ला कोड</span></span>' +
-      '<input id="unlock-code" data-field="unlock-code" type="password" autocomplete="off" ' +
-      'style="letter-spacing:.14em" placeholder="District code"></label>' +
-    (S.gateError ? '<div class="msg err">' + esc(S.gateError) + '</div>' : '') +
-    '<div class="btn-row"><button class="btn primary" data-act="unlock">Unlock</button></div>' +
-  '</section>';
-}
-
 function loadList() {
-  if (!isDistrict()) { render(); return Promise.resolve(); }
   S.listLoading = true;
-  return rpc('apiListCases', districtToken(), {
+  return rpc('apiListCases', {
     disease: S.llDisease, scope: S.scope, from: S.llFrom, to: S.llTo,
     query: S.llQuery, page: S.llPage, perPage: 50,
     outcome: S.view === 'outcome' ? S.outcomeFilter : 'all'
@@ -1164,7 +1078,6 @@ function diseaseFilterRow(current, actName) {
 }
 
 function viewLineList() {
-  if (!isDistrict()) return scopeBar() + unlockPanel('Line list');
   if (!S.list) {
     if (!S.listLoading) loadList();
     return scopeBar() + '<div class="hint">Loading line list…</div>';
@@ -1234,7 +1147,6 @@ function viewLineList() {
 /* --------------------------------------------------------------- outcome -- */
 
 function viewOutcome() {
-  if (!isDistrict()) return scopeBar() + unlockPanel('Outcome');
   if (!S.list) {
     if (!S.listLoading) loadList();
     return scopeBar() + '<div class="hint">Loading cases…</div>';
@@ -1341,9 +1253,8 @@ function showCsvFallback(filename, text) {
 }
 
 function goView(view) {
-  // The two PII screens share one loaded page of results.
+  // The line list and outcome screens share one loaded page of results.
   S.view = view;
-  S.gateError = '';
   if (view === 'daily' || view === 'cases') S.reportingOpen = true;
   render();
   if (view === 'dashboard') loadDashboard();
@@ -1372,49 +1283,6 @@ document.addEventListener('click', function (ev) {
     return;
   }
 
-  if (act === 'gate-tab') { S.gateTab = t.getAttribute('data-tab'); S.gateError = ''; render(); return; }
-
-  if (act === 'login-unit') {
-    ev.preventDefault();
-    var p = (qs('#gate-palika') || {}).value || S.palika;
-    var code = (qs('#gate-code') || {}).value || '';
-    rpc('apiLogin', p, code)
-      .then(function (r) {
-        S.unit = { token: r.token, unit_id: r.unit_id, palika: r.palika };
-        S.palika = r.palika; S.scope = 'all'; S.gateError = '';
-        saveSession(); start();
-      })
-      .catch(function (e) { S.gateError = e.message; render(); });
-    return;
-  }
-
-  if (act === 'login-district') {
-    ev.preventDefault();
-    var dcode = (qs('#gate-code') || {}).value || '';
-    rpc('apiLoginDistrict', dcode)
-      .then(function (r) {
-        S.district = { token: r.token };
-        S.gateError = '';
-        saveSession(); start();
-      })
-      .catch(function (e) { S.gateError = e.message; render(); });
-    return;
-  }
-
-  if (act === 'unlock') {
-    ev.preventDefault();
-    var ucode = (qs('#unlock-code') || {}).value || '';
-    rpc('apiLoginDistrict', ucode)
-      .then(function (r) {
-        S.district = { token: r.token };
-        S.gateError = ''; saveSession();
-        S.list = null; loadList();
-        toast('Line list unlocked.');
-      })
-      .catch(function (e) { S.gateError = e.message; render(); });
-    return;
-  }
-
   if (act === 'csv-close') { qs('#modal-host').innerHTML = ''; return; }
   if (act === 'csv-copy') {
     var ta = qs('#csv-dump');
@@ -1426,7 +1294,6 @@ document.addEventListener('click', function (ev) {
     return;
   }
 
-  if (act === 'signout') { ev.preventDefault(); signOut(); return; }
   if (act === 'nav') { goView(t.getAttribute('data-view')); return; }
   if (act === 'toggle-reporting') { S.reportingOpen = !S.reportingOpen; render(); return; }
   if (act === 'clear-scope') { S.scope = 'all'; refreshForScope(); return; }
@@ -1445,8 +1312,7 @@ document.addEventListener('click', function (ev) {
 
   if (act === 'export') {
     var what = t.getAttribute('data-what');
-    var tok = (what === 'linelist') ? districtToken() : activeToken();
-    rpc('apiExport', tok, what, { scope: S.scope, range: S.dashRange, disease: S.llDisease })
+    rpc('apiExport', what, { scope: S.scope, range: S.dashRange, disease: S.llDisease })
       .then(function (r) { download(r.filename, r.csv); })
       .catch(function (e) { toast(e.message, 'err'); });
     return;
@@ -1489,14 +1355,14 @@ document.addEventListener('click', function (ev) {
     var did = t.getAttribute('data-id');
     if (S.confirmDelete !== did) { S.confirmDelete = did; render(); return; }
     S.confirmDelete = null;
-    rpc('apiDeleteCase', districtToken() || writeToken(), did)
+    rpc('apiDeleteCase', did)
       .then(function (r) { toast(r.message); return loadList().then(loadDashboard); })
       .catch(function (e) { toast(e.message, 'err'); });
     return;
   }
 
   if (act === 'set-outcome') {
-    rpc('apiSetOutcome', districtToken(), t.getAttribute('data-id'), t.getAttribute('data-outcome'))
+    rpc('apiSetOutcome', t.getAttribute('data-id'), t.getAttribute('data-outcome'))
       .then(function () { return loadList(); })
       .catch(function (e) { toast(e.message, 'err'); });
     return;
@@ -1540,7 +1406,6 @@ document.addEventListener('input', function (ev) {
     return;
   }
   if (field === 'll-query') { S.llQuery = el.value; debouncedList(); return; }
-  if (field === 'gate-code' || field === 'unlock-code') { S.gateError = ''; return; }
 });
 
 document.addEventListener('change', function (ev) {
@@ -1548,14 +1413,15 @@ document.addEventListener('change', function (ev) {
   var field = el.getAttribute && el.getAttribute('data-field');
   if (!field) return;
 
-  // Keep the sign-in choice in state, otherwise a failed attempt re-renders the
-  // form and silently resets the palika the reporter had picked.
-  if (field === 'gate-palika') { S.palika = el.value; return; }
   // Ticking "nothing to report" greys out the count boxes, so this one needs a
   // full re-render rather than the cheap derived-value patch.
   if (field === 'nil-report') { S.draft.nil_report = el.checked ? '1' : '0'; render(); return; }
   if (field === 'scope') { S.scope = el.value; refreshForScope(); return; }
-  if (field === 'work-palika') { S.palika = el.value; loadPulse(); return; }
+  /* Both selectors set the palika being reported for. Remember it either way —
+     the shared health-post phone should come back to the same palika tomorrow
+     without anyone having to re-pick it. */
+  if (field === 'palika') { S.palika = el.value; savePalika(); render(); loadPulse(); return; }
+  if (field === 'work-palika') { S.palika = el.value; savePalika(); loadPulse(); return; }
   if (field === 'report-date') {
     S.reportDate = el.value;
     S.caseForm.test_date = el.value;
@@ -1571,21 +1437,6 @@ document.addEventListener('change', function (ev) {
   }
 });
 
-/* Enter submits the credential forms. */
-document.addEventListener('keydown', function (ev) {
-  if (ev.key !== 'Enter') return;
-  var el = ev.target;
-  var field = el.getAttribute && el.getAttribute('data-field');
-  if (field === 'gate-code') {
-    ev.preventDefault();
-    var btn = qs('[data-act="login-unit"]') || qs('[data-act="login-district"]');
-    if (btn) btn.click();
-  } else if (field === 'unlock-code') {
-    ev.preventDefault();
-    var ub = qs('[data-act="unlock"]');
-    if (ub) ub.click();
-  }
-});
 
 start();
 

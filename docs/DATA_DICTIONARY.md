@@ -76,13 +76,13 @@ never publish it, never paste it into a group chat.
 | `palika` | text | Denormalised |
 | `ward` | int | Ward number — the unit that vector control actually works in |
 | `tole` | text | Settlement/cluster. **The most operationally useful field here** — two cases in one tole is a response trigger; two in one palika is not |
-| `patient_name` | text | **PII.** Released by the API only to a district session |
+| `patient_name` | text | **PII.** Released by the API to anyone who asks — there is no authentication |
 | `age` | int | |
 | `age_unit` | text | `years` \| `months`. Infants are reported in months |
 | `sex` | text | `Male` \| `Female` \| `Other` |
 | `test_type` | text | Must be valid for the disease (see `Schema.gs ▸ DISEASES`) |
 | `test_date` | date | **The epidemiological date.** Every curve and every range filter uses this, not the entry date |
-| `outcome` | text | `treatment` \| `recovered` \| `died`. District staff only |
+| `outcome` | text | `treatment` | `recovered` | `died`. Anyone may set it |\| `recovered` \| `died`. District staff only |
 | `reporter` | text | |
 | `created_at` / `updated_at` | datetime | |
 | `deleted` | bool | **Soft delete.** Rows are never physically removed |
@@ -128,13 +128,8 @@ lists it until the daily return is corrected.
 | `level_type` | text | `Municipality` \| `Rural Municipality` |
 | `wards` | int | Reference for ward-number validation |
 | `focal_person` / `phone` | text | Fill these in — this is your call list |
-| `code_hash` | text | SHA-256 of the access code plus salt |
-| `code_salt` | text | Per-unit random salt |
 | `active` | bool | `FALSE` hides the unit everywhere without deleting history |
 
-Access codes are **never stored in plaintext**. A lost code is reissued, not
-recovered. Codes avoid look-alike characters (`0`/`O`, `1`/`I`) because they get
-read out over the phone.
 
 ---
 
@@ -143,8 +138,6 @@ read out over the phone.
 Plain `key` / `value` / `note`. Editable by a non-programmer. See
 `DEPLOYMENT.md ▸ Step 4` for the keys that matter.
 
-`district_code_hash` and `district_code_salt` are managed by the menu — editing
-them by hand will lock everyone out of the line list.
 
 ---
 
@@ -212,16 +205,23 @@ the rule.
 
 ## Access control
 
-| | Unit session | District session |
-|---|---|---|
-| Dashboard (aggregates) | yes | yes |
-| Own daily return | yes | yes, any palika |
-| Own positive cases | yes | yes, any palika |
-| Another palika's data | **no** | yes |
-| Patient names | **no** — masked as `••••••` | yes |
-| Set outcome | **no** | yes |
-| Export line list | **no** | yes |
+There is none. Every row in this dictionary is readable and writable by anyone
+who has the URL.
 
-Masking happens **server-side** in `publicCase_()`. Names are never sent to a
-browser that is not entitled to them, so they cannot be recovered from the
-page source.
+| | Anyone with the link |
+|---|---|
+| Dashboard (aggregates) | yes |
+| Any palika's daily return | yes, read and write |
+| Any palika's positive cases | yes, add, edit and delete |
+| Patient names | yes, in full |
+| Set outcome | yes |
+| Export line list with names | yes |
+
+`publicCase_()` used to mask `patient_name` for anyone without a district
+session. It no longer masks anything, because there are no sessions to
+distinguish. See `README.md ▸ Access model` for why, and `OPERATIONS.md` for
+what to do if that becomes a problem.
+
+The only remaining server-side protections are the reconciliation rules, the
+date window, and the field validation above — all of which guard *data quality*,
+not confidentiality.
