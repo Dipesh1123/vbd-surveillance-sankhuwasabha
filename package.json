@@ -4,8 +4,8 @@
   "private": true,
   "description": "Daily dengue and scrub typhus reporting for Health Office Sankhuwasabha — Google Apps Script web app over a Google Sheets database.",
   "scripts": {
-    "test": "npm run build && npm run check:syntax && npm run check:contract && npm run test:backend && npm run test:edge && npm run test:frontend && npm run test:session && npm run test:setup && npm run test:transport && npm run test:proxy",
-    "build": "node scripts/build-gas-html.js",
+    "test": "npm run build:gas && npm run check:syntax && npm run check:contract && npm run test:backend && npm run test:edge && npm run test:frontend && npm run test:session && npm run test:setup && npm run test:transport && npm run test:proxy",
+    "build:gas": "node scripts/build-gas-html.js",
     "check:build": "node scripts/build-gas-html.js --check",
     "check:syntax": "node test/syntax.check.js apps-script",
     "check:contract": "node test/contract.check.js apps-script",

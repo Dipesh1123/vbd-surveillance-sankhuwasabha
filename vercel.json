@@ -2,8 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "public",
   "framework": null,
-  "buildCommand": null,
-  "installCommand": null,
   "functions": {
     "api/rpc.js": { "maxDuration": 30 }
   },

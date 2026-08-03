@@ -63,9 +63,18 @@ vercel.json             static root, cache and security headers
 ```
 
 `apps-script/App.html` and `apps-script/Styles.html` are **generated** from
-`public/app.js` and `public/styles.css` by `npm run build`. Do not edit them —
+`public/app.js` and `public/styles.css` by `npm run build:gas`. Do not edit them —
 edit `public/`. `npm test` runs the build first, so the tests always exercise
 what would actually ship. `npm run check:build` fails if they are out of date.
+
+**Do not rename `build:gas` to `build`.** Vercel runs `npm run build`
+automatically whenever a script by that exact name exists, regardless of what
+`vercel.json` says — `"buildCommand": null` means *"not specified"*, not *"do
+not build"*. This build step generates Apps Script files, needs `scripts/`, and
+`.vercelignore` deliberately keeps `scripts/` out of the deployment, so on
+Vercel it can only fail. The first deploy of this project failed for exactly
+that reason. `transport.test.js` now asserts the name, so the mistake is caught
+locally instead of in a build log.
 
 ---
 

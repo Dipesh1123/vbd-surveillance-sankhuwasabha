@@ -64,7 +64,7 @@ for (const o of OUTPUTS) {
     continue;
   }
   if (CHECK) {
-    console.error("STALE  " + o.to + " does not match " + o.from + " — run: npm run build");
+    console.error("STALE  " + o.to + " does not match " + o.from + " — run: npm run build:gas");
     failures++;
     continue;
   }
