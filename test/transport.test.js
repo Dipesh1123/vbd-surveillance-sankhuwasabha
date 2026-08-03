@@ -185,6 +185,27 @@ function callFn(fn, args) {
   check("vercel.json does not rewrite that path out from under it",
     !/\"rewrites\"/.test(fs.readFileSync(path.join(__dirname, "..", "vercel.json"), "utf8")));
 
+  /*
+   * A three-file coupling that is invisible until a deploy fails, and did:
+   * Vercel runs `npm run build` automatically whenever package.json has a
+   * script by that exact name, whatever vercel.json says — `"buildCommand":
+   * null` means "not specified", not "do not build". Our only build step
+   * generates Apps Script files, needs scripts/, and .vercelignore removes
+   * scripts/ from the deployment. So the build cannot succeed there and must
+   * never be attempted. Naming it build:gas is what keeps Vercel out of it.
+   */
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+  const vercelIgnore = fs.readFileSync(path.join(__dirname, "..", ".vercelignore"), "utf8");
+  const ignoresScripts = /^\s*scripts\/\s*$/m.test(vercelIgnore);
+  check("the Apps Script build step is not named 'build'",
+    !pkg.scripts.build,
+    "package.json has a `build` script; Vercel will run it on every deploy");
+  check("...and it is still wired into npm test under its real name",
+    !!pkg.scripts["build:gas"] && /build:gas/.test(pkg.scripts.test), pkg.scripts.test);
+  check(".vercelignore keeps scripts/ out of the deployment", ignoresScripts);
+  check("no npm script Vercel runs by default depends on an ignored path",
+    !pkg.scripts.build && !pkg.scripts.vercelbuild, Object.keys(pkg.scripts).join(", "));
+
   console.log("\n--- 11. The generated Apps Script copy is in step with public/ ---");
   const appJs = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const appHtml = fs.readFileSync(path.join(dir, "App.html"), "utf8");

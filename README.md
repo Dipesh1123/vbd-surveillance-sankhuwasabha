@@ -40,7 +40,7 @@ everything except the one-time Google authorisation, which no tool can.
 
 **Edit `public/`, not `apps-script/*.html`.** `apps-script/App.html` and
 `Styles.html` are generated from `public/app.js` and `public/styles.css` by
-`npm run build`, which `npm test` runs first. Two hand-maintained copies of a
+`npm run build:gas`, which `npm test` runs first. Two hand-maintained copies of a
 1,500-line client would drift within a week.
 
 ---
