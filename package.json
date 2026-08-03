@@ -6,6 +6,7 @@
   "scripts": {
     "test": "npm run build:gas && npm run check:syntax && npm run check:contract && npm run test:backend && npm run test:edge && npm run test:frontend && npm run test:setup && npm run test:transport && npm run test:proxy",
     "build:gas": "node scripts/build-gas-html.js",
+    "build:logo": "python scripts/make-logo.py",
     "check:build": "node scripts/build-gas-html.js --check",
     "check:syntax": "node test/syntax.check.js apps-script",
     "check:contract": "node test/contract.check.js apps-script",

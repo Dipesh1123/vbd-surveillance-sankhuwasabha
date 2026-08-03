@@ -193,6 +193,25 @@ function callFn(fn, args) {
   check("no npm script Vercel runs by default depends on an ignored path",
     !pkg.scripts.build && !pkg.scripts.vercelbuild, Object.keys(pkg.scripts).join(", "));
 
+  console.log("\n--- 10b. The emblem ships to both hosting paths ---");
+  /* The source logo is ~900 KB at 1920px and is drawn at 56px. It is resized and
+     inlined by scripts/make-logo.py; these guard the two ways that goes wrong —
+     someone committing the raw file, or the Apps Script shell forgetting to
+     include it, which fails silently as a blank square. */
+  const logoCss = fs.readFileSync(path.join(__dirname, "..", "public", "logo.css"), "utf8");
+  check("logo.css defines .emblem as an inline PNG",
+    /\.emblem\s*\{/.test(logoCss) && /data:image\/png;base64,/.test(logoCss));
+  check("the inlined emblem stays small enough for a 3G phone",
+    logoCss.length < 40 * 1024, Math.round(logoCss.length / 1024) + " KB");
+  check("public/index.html loads it", /href="logo\.css"/.test(
+    fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8")));
+  check("the Apps Script shell includes it", /include\('Logo'\)/.test(
+    fs.readFileSync(path.join(dir, "Index.html"), "utf8")));
+  check("and the generated partial exists",
+    fs.existsSync(path.join(dir, "Logo.html")));
+  check("no raw megabyte PNG was committed into public/",
+    !fs.existsSync(path.join(__dirname, "..", "public", "logo.png")));
+
   console.log("\n--- 11. The generated Apps Script copy is in step with public/ ---");
   const appJs = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const appHtml = fs.readFileSync(path.join(dir, "App.html"), "utf8");

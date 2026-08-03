@@ -53,6 +53,7 @@ public/                 the site Vercel serves
   config.js             where the browser sends API calls — the only knob
   app.js                the client application  (source of truth)
   styles.css            design tokens and layout (source of truth)
+  logo.css              GENERATED — the emblem, resized and inlined
 
 api/                    Vercel serverless functions
   _upstream.js          which Apps Script deployment to talk to
@@ -66,6 +67,21 @@ vercel.json             static root, cache and security headers
 `public/app.js` and `public/styles.css` by `npm run build:gas`. Do not edit them —
 edit `public/`. `npm test` runs the build first, so the tests always exercise
 what would actually ship. `npm run check:build` fails if they are out of date.
+
+### The emblem
+
+`public/logo.css` is generated from `uploads/logo.png` by
+`npm run build:logo` (Python + Pillow). Run it only when the source image
+changes; the output is committed.
+
+The source is 1920×1621 and about 900 KB, and the app draws it at 56 px. The
+script resizes it to 128 px and quantises it to a 256-colour palette — 900 KB
+down to 7.5 KB — then inlines it as a data URI. It is a data URI rather than an
+`<img src="logo.png">` because HtmlService **cannot serve a binary file**, so
+the `/exec` fallback would otherwise show a blank square. A stylesheet is the
+one form both hosting paths can carry from a single source.
+
+`Config ▸ logo_url` still overrides it if a district wants its own image.
 
 **Do not rename `build:gas` to `build`.** Vercel runs `npm run build`
 automatically whenever a script by that exact name exists, regardless of what

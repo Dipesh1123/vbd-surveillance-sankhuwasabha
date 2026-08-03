@@ -29,8 +29,7 @@ const TODAY = srv("todayIso()");
 function include(name) { return fs.readFileSync(path.join(dir, name + ".html"), "utf8"); }
 let indexHtml = fs.readFileSync(path.join(dir, "Index.html"), "utf8");
 indexHtml = indexHtml
-  .replace(/<\?!=\s*include\('Styles'\);\s*\?>/, include("Styles"))
-  .replace(/<\?!=\s*include\('App'\);\s*\?>/, include("App"))
+  .replace(/<\?!=\s*include\('([A-Za-z0-9_]+)'\);\s*\?>/g, (_, name) => include(name))
   .replace(/<\?!=\s*JSON\.stringify\(buildStamp\)\s*\?>/, JSON.stringify("test-build"));
 
 if (/<\?/.test(indexHtml)) {
@@ -153,7 +152,14 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   check("bootstrap was called", calls.includes("apiBootstrap"));
   check("no login call was ever made",
     !calls.includes("apiLogin") && !calls.includes("apiLoginDistrict"), calls.join(","));
-  check("emblem fallback rendered", !!$("svg"));
+  /* The real Government of Nepal emblem, not the old placeholder SVG. It is a
+     data URI in logo.css, so this also proves the stylesheet reached the page —
+     on the Apps Script path that depends on Index.html including it. */
+  check("emblem rendered in the masthead", !!$(".masthead .emblem"));
+  check("no placeholder SVG left behind", !$(".masthead svg"));
+  check("the emblem stylesheet was loaded",
+    /\.emblem\s*\{[^}]*data:image\/png;base64,/.test(
+      [...D.querySelectorAll("style")].map(s => s.textContent).join("\n")));
   check("Nepali script renders", /[ऀ-ॿ]/.test(text()));
 
   console.log("\n--- B. The palika is chosen, not authenticated ---");

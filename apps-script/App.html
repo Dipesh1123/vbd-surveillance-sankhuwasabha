@@ -295,16 +295,27 @@ function render() {
   restoreFocus(f);
 }
 
-/* ------------------------------------------------------------ gate view -- */
+/* ----------------------------------------------------------- page parts -- */
 
+/**
+ * The Government of Nepal emblem.
+ *
+ * Normally the real emblem, inlined as a data URI by scripts/make-logo.py and
+ * applied through the .emblem class in logo.css — inlined rather than an
+ * <img src> because HtmlService cannot serve a binary file, and the /exec
+ * fallback has to show the same thing the hosted site does.
+ *
+ * `config.logo_url` still overrides it, so a district can point at its own
+ * image without a code change.
+ */
 function logoMark(size) {
   var url = S.boot && S.boot.config.logo_url;
-  if (url) return '<img src="' + esc(url) + '" alt="Government of Nepal emblem" style="width:' + size + 'px;height:' + size + 'px;object-fit:contain">';
-  // Built-in fallback so the app never shows a broken image.
-  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 64 64" role="img" aria-label="Government of Nepal">' +
-    '<circle cx="32" cy="32" r="30" fill="#003893"/>' +
-    '<path d="M32 12 L44 30 H36 L46 46 H18 L28 30 H20 Z" fill="#ffffff"/>' +
-    '<circle cx="32" cy="50" r="4" fill="#dc143c"/></svg>';
+  if (url) {
+    return '<img src="' + esc(url) + '" alt="Government of Nepal emblem" ' +
+      'style="width:' + size + 'px;height:' + size + 'px;object-fit:contain">';
+  }
+  return '<span class="emblem" role="img" aria-label="Government of Nepal" ' +
+    'style="width:' + size + 'px;height:' + size + 'px"></span>';
 }
 
 /**
