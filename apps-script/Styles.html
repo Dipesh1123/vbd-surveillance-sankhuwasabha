@@ -85,6 +85,15 @@ input:disabled, select:disabled, textarea:disabled {
 }
 .nilbox.on { border-color: var(--blue); background: var(--blue-tint); }
 
+/* Tick-box group for a disease whose combo test can be positive on more than
+   one marker at once (see DISEASES.*.multiTestType). */
+.checkrow {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 11px 12px;
+  border: 1px solid var(--field-line); border-radius: 2px; background: var(--field);
+}
+.checkrow.err { border-color: var(--err); }
+.chk { display: flex; align-items: center; gap: 7px; font-size: 14px; cursor: pointer; min-height: 32px; }
+
 /* ------------------------------------------------------------- chrome -- */
 .flagbar { height: 5px; background: var(--crimson); }
 

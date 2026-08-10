@@ -48,9 +48,10 @@ var SCHEMA = {
       { name: 'palika',           type: 'text', width: 220 },
 
       { name: 'dengue_suspects',  type: 'int', width: 90 },
-      { name: 'dengue_ns1',       type: 'int', width: 80 },
-      { name: 'dengue_igm',       type: 'int', width: 80 },
-      { name: 'dengue_igg',       type: 'int', width: 80 },
+      { name: 'dengue_rdt_combo', type: 'int', width: 90, note: 'RDT combo kits used (one kit reads NS1 + IgG + IgM together — count kits, not markers)' },
+      { name: 'dengue_ns1',       type: 'int', width: 80, note: 'Legacy column, kept for history. Superseded by dengue_rdt_combo — no longer written by the app.' },
+      { name: 'dengue_igm',       type: 'int', width: 80, note: 'Legacy column, kept for history. Superseded by dengue_rdt_combo — no longer written by the app.' },
+      { name: 'dengue_igg',       type: 'int', width: 80, note: 'Legacy column, kept for history. Superseded by dengue_rdt_combo — no longer written by the app.' },
       { name: 'dengue_pcr',       type: 'int', width: 80 },
       { name: 'dengue_positives', type: 'int', width: 100, note: 'Declared positives — must equal rows in Cases for this unit/date/disease' },
 
@@ -87,7 +88,7 @@ var SCHEMA = {
       { name: 'age',          type: 'int',  width: 70 },
       { name: 'age_unit',     type: 'text', width: 80, note: 'years | months' },
       { name: 'sex',          type: 'text', width: 80, note: 'Male | Female | Other' },
-      { name: 'test_type',    type: 'text', width: 110 },
+      { name: 'test_type',    type: 'text', width: 150, note: 'Dengue: one or more markers joined by " + " (e.g. "NS1 + IgM") — one RDT combo kit can read positive on several markers at once. Scrub typhus: a single value, as before.' },
       { name: 'test_date',    type: 'date', width: 110, note: 'Epidemiological date — all curves are built on this' },
       { name: 'outcome',      type: 'text', width: 120, note: 'treatment | recovered | died' },
       { name: 'reporter',     type: 'text', width: 140 },
@@ -147,7 +148,35 @@ var SCHEMA = {
   }
 };
 
-/** Disease definitions — mirrored by the frontend. */
+/**
+ * Disease definitions — mirrored by the frontend.
+ *
+ * fields       every column that ever counted a test for this disease. Used
+ *              wherever a total must include history: the tests-done sum in
+ *              validatePulse_(), the dashboard's cumulative figures, and the
+ *              weekly data-quality report. Never drop an entry from here —
+ *              that would silently zero out years of past totals.
+ * inputFields  only the columns shown as a number box on the Daily numbers
+ *              screen today. A column can be in `fields` without being in
+ *              `inputFields` once it is retired (see dengue below).
+ *
+ * Dengue's NS1 / IgM / IgG used to be three separate boxes, but the district
+ * only ever runs one combo RDT kit that reads all three markers off a single
+ * cassette — a health worker recording "1" against each box was one kit, not
+ * three tests, and the old Total tests figure counted it three times over.
+ * dengue_rdt_combo replaces those three boxes with one (one entry per kit
+ * used); dengue_ns1/igm/igg stay in `fields` so every return filed before this
+ * change keeps counting correctly, but they are no longer rendered and the
+ * app never writes to them again.
+ *
+ * testTypes     the marker(s) a positive case can be recorded against, on the
+ *               Positive cases screen.
+ * multiTestType true when more than one marker can apply to the same case —
+ *               dengue's combo kit can read positive on NS1, IgM and IgG at
+ *               once for the same patient, so that screen uses checkboxes
+ *               instead of a single dropdown. Scrub typhus's tests are run
+ *               separately, so it keeps one answer per case.
+ */
 var DISEASES = {
   dengue: {
     key: 'dengue',
@@ -158,8 +187,10 @@ var DISEASES = {
     accentSoft: '#f2b6c1',
     tint: '#fdf2f4',
     /* [column suffix, display label] */
-    fields: [['ns1', 'NS1'], ['igm', 'IgM'], ['igg', 'IgG'], ['pcr', 'PCR']],
-    testTypes: ['NS1', 'IgM', 'IgG', 'PCR']
+    fields: [['rdt_combo', 'RDT combined (NS1, IgG, IgM)'], ['ns1', 'NS1'], ['igm', 'IgM'], ['igg', 'IgG'], ['pcr', 'PCR']],
+    inputFields: [['rdt_combo', 'RDT combined (NS1, IgG, IgM)'], ['pcr', 'PCR']],
+    testTypes: ['NS1', 'IgM', 'IgG', 'PCR'],
+    multiTestType: true
   },
   scrub: {
     key: 'scrub',
@@ -170,7 +201,9 @@ var DISEASES = {
     accentSoft: '#b8c5e2',
     tint: '#f1f4fb',
     fields: [['rdt', 'IgM RDT'], ['elisa', 'IgM ELISA'], ['pcr', 'PCR']],
-    testTypes: ['IgM RDT', 'IgM ELISA', 'PCR']
+    inputFields: [['rdt', 'IgM RDT'], ['elisa', 'IgM ELISA'], ['pcr', 'PCR']],
+    testTypes: ['IgM RDT', 'IgM ELISA', 'PCR'],
+    multiTestType: false
   }
 };
 

@@ -335,9 +335,8 @@ function apiSaveCase(payload) {
     var testDate = toIsoDate(p.test_date) || todayIso();
     assertDateWindow_(testDate);
 
-    if (DISEASES[disease].testTypes.indexOf(String(p.test_type)) === -1) {
-      throw userError('That test type is not valid for ' + DISEASES[disease].label + '.');
-    }
+    var testType = normalizeTestType_(disease, p.test_type);
+    if (!testType) throw userError('Select at least one test type.');
 
     return withLock(function () {
       var all = readAll('Cases');
@@ -397,7 +396,7 @@ function apiSaveCase(payload) {
         age: toInt(p.age),
         age_unit: p.age_unit === 'months' ? 'months' : 'years',
         sex: ['Male', 'Female', 'Other'].indexOf(String(p.sex)) >= 0 ? String(p.sex) : '',
-        test_type: toText(p.test_type, 40),
+        test_type: testType,
         test_date: testDate,
         outcome: OUTCOMES[p.outcome] ? p.outcome : (editing ? editing.outcome : 'treatment'),
         reporter: toText(p.reporter, 80) || 'Focal person',
@@ -434,13 +433,45 @@ function apiSaveCase(payload) {
   });
 }
 
+/**
+ * Turn whatever the client sent for test_type into the canonical stored form.
+ * Dengue's combo RDT can come back positive on more than one marker for the
+ * same case, so its test_type is one or more of DISEASES.dengue.testTypes
+ * joined by " + ", always written in that canonical order regardless of the
+ * order the boxes were ticked. Scrub typhus keeps a single value, as before.
+ */
+function normalizeTestType_(disease, raw) {
+  var d = DISEASES[disease];
+  var order = d.testTypes;
+
+  if (!d.multiTestType) {
+    var single = String(raw || '').trim();
+    if (order.indexOf(single) === -1) {
+      throw userError('That test type is not valid for ' + d.label + '.');
+    }
+    return single;
+  }
+
+  var picked = String(raw || '').split('+').map(function (s) { return s.trim(); }).filter(Boolean);
+  var seen = {};
+  picked.forEach(function (t) {
+    if (order.indexOf(t) === -1) throw userError('That test type is not valid for ' + d.label + '.');
+    seen[t] = true;
+  });
+  return order.filter(function (t) { return seen[t]; }).join(' + ');
+}
+
 function validateCase_(f) {
   var e = {};
   if (!toText(f.patient_name, 120)) e.patient_name = 'Patient name is required.';
   if (!String(f.age === 0 ? '0' : (f.age || '')).trim()) e.age = 'Age is required.';
   if (['Male', 'Female', 'Other'].indexOf(String(f.sex)) === -1) e.sex = 'Select sex.';
   if (!String(f.ward || '').trim() || toInt(f.ward) < 1) e.ward = 'Ward number is required.';
-  if (!String(f.test_type || '').trim()) e.test_type = 'Select the test type.';
+  if (!String(f.test_type || '').trim()) {
+    e.test_type = (DISEASES[f.disease] && DISEASES[f.disease].multiTestType)
+      ? 'Select at least one test type.'
+      : 'Select the test type.';
+  }
 
   var age = toInt(f.age);
   if (f.age_unit === 'years' && age > 120) e.age = 'Check the age — over 120 years.';

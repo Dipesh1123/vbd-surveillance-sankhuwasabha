@@ -35,9 +35,10 @@ One row per palika per day. Primary key `pulse_id`, natural key
 | `unit_id` | text | → `Units.unit_id` |
 | `palika` | text | Denormalised for humans reading the sheet |
 | `dengue_suspects` | int | Clinically suspected, whether or not tested |
-| `dengue_ns1` | int | NS1 antigen tests done |
-| `dengue_igm` | int | IgM tests done |
-| `dengue_igg` | int | IgG tests done |
+| `dengue_rdt_combo` | int | Combo RDT kits used — one kit reads NS1 + IgG + IgM together, so this counts kits, not markers |
+| `dengue_ns1` | int | **Legacy, kept for history only.** NS1 tests done, from before `dengue_rdt_combo` existed. The app no longer writes to this |
+| `dengue_igm` | int | **Legacy, kept for history only.** Superseded by `dengue_rdt_combo` |
+| `dengue_igg` | int | **Legacy, kept for history only.** Superseded by `dengue_rdt_combo` |
 | `dengue_pcr` | int | PCR tests done |
 | `dengue_positives` | int | **Declared positives.** Must equal the number of dengue `Cases` rows for this unit and date |
 | `scrub_suspects` | int | |
@@ -53,6 +54,24 @@ One row per palika per day. Primary key `pulse_id`, natural key
 
 **Total tests** for a disease is the sum of its test-type columns. It is
 deliberately *not* stored — a stored total is one more thing that can go stale.
+
+### Why dengue has legacy test-type columns
+
+The district runs one combo RDT kit for dengue that reads NS1, IgG and IgM off
+a single cassette. The original form had a box for each marker, so one kit
+used got recorded as three tests done — a health worker writing "1" against
+NS1, IgM and IgG counted as three in Total tests, when it was one cassette on
+one patient. `dengue_rdt_combo` replaced those three boxes with one box, one
+entry per kit.
+
+The three old columns (`dengue_ns1`, `dengue_igm`, `dengue_igg`) are **not
+deleted and not backfilled.** Every return filed before this change keeps its
+original figures, and Total tests still adds them in — see `DISEASES.dengue.fields`
+in `Schema.gs`, which lists every column that has ever counted a dengue test.
+Only `DISEASES.dengue.inputFields` (`dengue_rdt_combo`, `dengue_pcr`) is shown
+as a box on the Daily numbers screen going forward. If you are reading a return
+filed after this change and see all three legacy columns at 0, that is
+correct, not missing data.
 
 ### Why `nil_report` exists
 
@@ -80,7 +99,7 @@ never publish it, never paste it into a group chat.
 | `age` | int | |
 | `age_unit` | text | `years` \| `months`. Infants are reported in months |
 | `sex` | text | `Male` \| `Female` \| `Other` |
-| `test_type` | text | Must be valid for the disease (see `Schema.gs ▸ DISEASES`) |
+| `test_type` | text | Scrub typhus: one value from `Schema.gs ▸ DISEASES`. Dengue: one *or more* markers joined by `" + "`, e.g. `NS1 + IgM` — the same combo kit can read positive on more than one marker for the same patient. Cases filed before the checkboxes existed carry a single legacy value; the app treats those (other than a bare `PCR`) as `NS1` when opened for editing, since the district confirmed the kit always read NS1 regardless of which marker got written down at the time — see `legacyTestType_()` in `public/app.js` |
 | `test_date` | date | **The epidemiological date.** Every curve and every range filter uses this, not the entry date |
 | `outcome` | text | `treatment` | `recovered` | `died`. Anyone may set it |\| `recovered` \| `died`. District staff only |
 | `reporter` | text | |

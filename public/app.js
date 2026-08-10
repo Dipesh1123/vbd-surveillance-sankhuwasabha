@@ -208,6 +208,33 @@ function emptyCase(date) {
   };
 }
 
+/**
+ * The day the combo-RDT checkboxes replaced the old one-choice Test type
+ * dropdown. Only used by legacyTestType_() below — adjust it if the real
+ * rollout date ends up different from when this was written.
+ */
+var DENGUE_MULTI_TEST_CUTOVER = '2026-08-06';
+
+/**
+ * Dengue cases recorded before that date carry a single legacy marker (NS1,
+ * IgM or IgG) from the old dropdown. Every one of those RDT results was in
+ * fact NS1-positive — the district confirmed the kit always reads NS1,
+ * whichever marker happened to get recorded at the time — so opening one of
+ * those cases to edit now shows NS1 ticked. A case created on or after the
+ * cutover was already entered with the checkboxes, so whatever marker it
+ * holds (even a single one, even one that is not NS1 — a kit can legitimately
+ * read IgM-positive and NS1-negative later in the illness) is taken at face
+ * value. PCR results are a separate lab test, not part of this mix-up, and
+ * are always left exactly as recorded. Nothing on the sheet changes unless
+ * the case is saved again with this screen open.
+ */
+function legacyTestType_(disease, testType, createdAt) {
+  var t = String(testType || '');
+  if (disease !== 'dengue' || !t || t.indexOf('+') !== -1 || t === 'PCR') return t;
+  if (String(createdAt || '').slice(0, 10) >= DENGUE_MULTI_TEST_CUTOVER) return t;
+  return 'NS1';
+}
+
 /*
  * There is no session to remember, but which palika this device reports for is
  * worth keeping: a health post shares one phone and files for the same palika
@@ -738,7 +765,7 @@ function viewDaily() {
     var d = ds[k];
     var i = iss[k];
 
-    var testInputs = d.fields.map(function (f) {
+    var testInputs = d.inputFields.map(function (f) {
       return '<label class="field"><span class="cap" style="font-size:12px;color:var(--ink-4)">' + esc(f[1]) + '</span>' +
         '<input class="num" id="f-' + k + '_' + f[0] + '" data-field="daily" data-name="' + k + '_' + f[0] + '" ' +
         'type="number" min="0" inputmode="numeric" placeholder="0"' + dis + ' value="' + esc(dv(k + '_' + f[0])) + '"></label>';
@@ -951,6 +978,29 @@ function viewCases() {
     return '<option value="' + esc(t) + '"' + (S.caseForm.test_type === t ? ' selected' : '') + '>' + esc(t) + '</option>';
   })).join('');
 
+  // A combo RDT kit can read positive on more than one marker for the same
+  // patient, so a multi-marker disease gets a tick-box per marker instead of
+  // a single dropdown.
+  var testTypeField;
+  if (d.multiTestType) {
+    var picked = S.caseForm.test_type ? S.caseForm.test_type.split('+').map(function (s) { return s.trim(); }) : [];
+    var checks = d.testTypes.map(function (t) {
+      var on = picked.indexOf(t) >= 0;
+      return '<label class="chk"><input type="checkbox" data-field="case-test-toggle" data-value="' +
+        esc(t) + '"' + (on ? ' checked' : '') + '> ' + esc(t) + '</label>';
+    }).join('');
+    testTypeField = '<label class="field"><span class="cap">Test type — tick all that apply <span>परीक्षणको प्रकार</span></span>' +
+      '<div class="checkrow' + (e.test_type ? ' err' : '') + '">' + checks + '</div>' +
+      (e.test_type ? '<span class="fe">' + esc(e.test_type) + '</span>' : '') +
+      '<span class="sub">One RDT kit can be positive on more than one marker — tick every marker that came back positive.</span>' +
+      '</label>';
+  } else {
+    testTypeField = '<label class="field"><span class="cap">Test type <span>परीक्षणको प्रकार</span></span>' +
+      '<select id="c-test" class="' + (e.test_type ? 'err' : '') + '" data-field="case" data-name="test_type">' +
+      testOpts + '</select>' +
+      (e.test_type ? '<span class="fe">' + esc(e.test_type) + '</span>' : '') + '</label>';
+  }
+
   var sexOpts = ['', 'Male', 'Female', 'Other'].map(function (v) {
     var label = v === '' ? 'Select' : (v === 'Male' ? 'Male · पुरुष' : v === 'Female' ? 'Female · महिला' : 'Other · अन्य');
     return '<option value="' + esc(v) + '"' + (S.caseForm.sex === v ? ' selected' : '') + '>' + esc(label) + '</option>';
@@ -1020,10 +1070,7 @@ function viewCases() {
         '</div>' +
 
         '<div class="grid g2">' +
-          '<label class="field"><span class="cap">Test type <span>परीक्षणको प्रकार</span></span>' +
-            '<select id="c-test" class="' + (e.test_type ? 'err' : '') + '" data-field="case" data-name="test_type">' +
-            testOpts + '</select>' +
-            (e.test_type ? '<span class="fe">' + esc(e.test_type) + '</span>' : '') + '</label>' +
+          testTypeField +
           '<label class="field"><span class="cap">Test date <span>परीक्षण मिति</span></span>' +
             '<input id="c-testdate" data-field="case" data-name="test_date" type="date" ' +
             'value="' + esc(S.caseForm.test_date) + '" max="' + esc(S.boot.today) + '">' +
@@ -1355,7 +1402,7 @@ document.addEventListener('click', function (ev) {
     S.caseForm = {
       patient_name: row.patient_name, age: String(row.age), age_unit: row.age_unit,
       sex: row.sex, ward: String(row.ward), tole: row.tole,
-      test_type: row.test_type, test_date: row.test_date
+      test_type: legacyTestType_(row.disease, row.test_type, row.created_at), test_date: row.test_date
     };
     S.caseErrors = {};
     goView('cases');
@@ -1427,6 +1474,18 @@ document.addEventListener('change', function (ev) {
   // Ticking "nothing to report" greys out the count boxes, so this one needs a
   // full re-render rather than the cheap derived-value patch.
   if (field === 'nil-report') { S.draft.nil_report = el.checked ? '1' : '0'; render(); return; }
+  if (field === 'case-test-toggle') {
+    var order = S.boot.diseases[S.caseDisease].testTypes;
+    var picked = S.caseForm.test_type ? S.caseForm.test_type.split('+').map(function (s) { return s.trim(); }) : [];
+    var val = el.getAttribute('data-value');
+    var at = picked.indexOf(val);
+    if (el.checked) { if (at === -1) picked.push(val); }
+    else if (at !== -1) { picked.splice(at, 1); }
+    picked.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+    S.caseForm.test_type = picked.join(' + ');
+    render();
+    return;
+  }
   if (field === 'scope') { S.scope = el.value; refreshForScope(); return; }
   /* Both selectors set the palika being reported for. Remember it either way —
      the shared health-post phone should come back to the same palika tomorrow

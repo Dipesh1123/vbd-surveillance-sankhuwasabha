@@ -124,6 +124,10 @@ function toggle(target, checked) {
   el.checked = checked;
   el.dispatchEvent(new win.Event("change", { bubbles: true }));
 }
+/** Selector for one marker's tick-box on the multi-select Test type field. */
+function testTypeBox(marker) {
+  return `[data-field="case-test-toggle"][data-value="${marker}"]`;
+}
 /* Only the rendered app, never the inline <script> source that also lives in
    <body> — otherwise assertions match the application's own source text. */
 const text = () => ["#root", "#toast-host", "#modal-host"]
@@ -200,7 +204,9 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   navTo("Daily numbers");
   await settle(20);
   check("daily form rendered", /Daily numbers · both diseases/.test(text()));
-  check("dengue inputs present", !!$("#f-dengue_ns1") && !!$("#f-dengue_igm"));
+  check("dengue inputs present", !!$("#f-dengue_rdt_combo") && !!$("#f-dengue_pcr"));
+  check("legacy dengue NS1/IgM/IgG boxes no longer rendered",
+    !$("#f-dengue_ns1") && !$("#f-dengue_igm") && !$("#f-dengue_igg"));
   check("scrub inputs present", !!$("#f-scrub_rdt") && !!$("#f-scrub_elisa"));
   check("nil-report checkbox present", !!$("#d-nil"));
   /* The palika is now a free choice on the form rather than a locked field.
@@ -211,8 +217,9 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
     $("#d-palika").value);
 
   console.log("\n--- F. Live reconciliation while typing ---");
-  setInput("#f-dengue_ns1", "6");
-  setInput("#f-dengue_igm", "2");
+  // One combo RDT kit reads NS1 + IgG + IgM together, so it is a single box:
+  // 8 kits used is 8 tests done, not 24 from summing three boxes.
+  setInput("#f-dengue_rdt_combo", "8");
   check("total tests updates live to 8", $('[data-tot="dengue"]').textContent === "8",
     $('[data-tot="dengue"]').textContent);
   setInput("#f-dengue_positives", "9");
@@ -228,12 +235,12 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   console.log("\n--- G. Nil report toggles the counts off ---");
   toggle("#d-nil", true);
   await settle();
-  check("count inputs disabled", $("#f-dengue_ns1").disabled === true);
+  check("count inputs disabled", $("#f-dengue_rdt_combo").disabled === true);
   check("reconciliation warning cleared", !/add 2 more/.test(text()));
   toggle("#d-nil", false);
   await settle();
-  check("inputs re-enabled", $("#f-dengue_ns1").disabled === false);
-  check("typed values survived the toggle", $("#f-dengue_ns1").value === "6", $("#f-dengue_ns1").value);
+  check("inputs re-enabled", $("#f-dengue_rdt_combo").disabled === false);
+  check("typed values survived the toggle", $("#f-dengue_rdt_combo").value === "8", $("#f-dengue_rdt_combo").value);
 
   console.log("\n--- H. Submit the daily return ---");
   setInput("#f-dengue_suspects", "12");
@@ -247,7 +254,8 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   const rawRow = srv(`JSON.stringify(findByKey('Pulses','pulse_id', pulseId('U03', ${JSON.stringify(TODAY)})))`);
   check("row written to the Pulses sheet", rawRow && rawRow !== "null");
   const saved = rawRow && rawRow !== "null" ? JSON.parse(rawRow) : {};
-  check("dengue NS1 stored as 6", saved.dengue_ns1 === 6, saved.dengue_ns1);
+  check("dengue RDT combo stored as 8", saved.dengue_rdt_combo === 8, saved.dengue_rdt_combo);
+  check("legacy dengue_ns1 left at 0 — no triple-counting", !saved.dengue_ns1, saved.dengue_ns1);
   check("dengue positives stored as 2", saved.dengue_positives === 2, saved.dengue_positives);
   check("remarks stored", saved.remarks === "RDT stock low", saved.remarks);
   check("nil_report stored false", saved.nil_report === false, saved.nil_report);
@@ -263,7 +271,7 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   setInput("#c-sex", "Female");
   setInput("#c-ward", "3");
   setInput("#c-tole", "Tumlingtar");
-  setInput("#c-test", "NS1");
+  toggle(testTypeBox("NS1"), true);
   click('[data-act="save-case"]');
   await settle(30);
   check("first case saved", /added to the line list/.test(toastText()), toastText());
@@ -285,17 +293,22 @@ const toastText = () => ($(".toast") ? $(".toast").textContent : "");
   setInput("#c-age", "31");
   setInput("#c-sex", "Male");
   setInput("#c-ward", "4");
-  setInput("#c-test", "IgM");
+  // One combo RDT kit can read positive on more than one marker for the same
+  // patient — tick both to prove the multi-select actually stores both.
+  toggle(testTypeBox("NS1"), true);
+  toggle(testTypeBox("IgM"), true);
   click('[data-act="save-case"]');
   await settle(30);
   check("second case saved", /added to the line list/.test(toastText()), toastText());
   check("quota reports all entered", /All 2 declared dengue positives/.test(text()),
     (text().match(/All \d+ declared[^.]*\./) || [])[0]);
+  check("second case stored both ticked markers",
+    srv("readAll('Cases').some(function(c){return c.patient_name==='Hari Limbu' && c.test_type==='NS1 + IgM';})"));
   setInput("#c-name", "Gita Sherpa");
   setInput("#c-age", "19");
   setInput("#c-sex", "Female");
   setInput("#c-ward", "5");
-  setInput("#c-test", "NS1");
+  toggle(testTypeBox("NS1"), true);
   click('[data-act="save-case"]');
   await settle(30);
   check("third case refused", !!$(".toast.err"), toastText());
